@@ -1,0 +1,10 @@
+streamlit
+httpx
+pydantic
+python-dotenv
+openai
+groq
+pypdf
+python-docx
+sqlalchemy
+psycopg2-binary

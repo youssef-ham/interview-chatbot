@@ -1,0 +1,485 @@
+[
+  {
+    "id": "py_001",
+    "topic": "Python",
+    "subtopic": "Data Structures",
+    "difficulty": "junior",
+    "question_type": "conceptual",
+    "question": "What is the difference between a list and a tuple?",
+    "expected_points": [
+      {"point": "list is mutable, tuple is immutable", "weight": 0.5},
+      {"point": "performance difference (tuples are slightly faster / use less memory)", "weight": 0.25},
+      {"point": "when to use each (e.g. tuple for fixed records, list for dynamic collections)", "weight": 0.25}
+    ],
+    "sample_answer": null,
+    "tags": ["list", "tuple", "mutability"],
+    "source": "curated_dataset"
+  },
+  {
+    "id": "py_002",
+    "topic": "Python",
+    "subtopic": "Data Structures",
+    "difficulty": "junior",
+    "question_type": "conceptual",
+    "question": "What is the difference between a set and a dictionary?",
+    "expected_points": [
+      {"point": "set stores unique unordered values, dict stores key-value pairs", "weight": 0.5},
+      {"point": "both use hashing under the hood for O(1) average lookup", "weight": 0.3},
+      {"point": "use case example for each", "weight": 0.2}
+    ],
+    "sample_answer": null,
+    "tags": ["set", "dict", "hashing"],
+    "source": "curated_dataset"
+  },
+  {
+    "id": "py_003",
+    "topic": "Python",
+    "subtopic": "Functions",
+    "difficulty": "junior",
+    "question_type": "conceptual",
+    "question": "What are *args and **kwargs used for?",
+    "expected_points": [
+      {"point": "*args collects extra positional arguments into a tuple", "weight": 0.4},
+      {"point": "**kwargs collects extra keyword arguments into a dict", "weight": 0.4},
+      {"point": "use case: writing flexible/generic function signatures", "weight": 0.2}
+    ],
+    "sample_answer": null,
+    "tags": ["args", "kwargs", "functions"],
+    "source": "curated_dataset"
+  },
+  {
+    "id": "py_004",
+    "topic": "Python",
+    "subtopic": "Mutability",
+    "difficulty": "junior",
+    "question_type": "conceptual",
+    "question": "What is the difference between mutable and immutable objects?",
+    "expected_points": [
+      {"point": "mutable objects can be changed in place (list, dict, set)", "weight": 0.4},
+      {"point": "immutable objects cannot be changed after creation (str, tuple, int)", "weight": 0.4},
+      {"point": "implication on function arguments / shared references", "weight": 0.2}
+    ],
+    "sample_answer": null,
+    "tags": ["mutability", "objects"],
+    "source": "curated_dataset"
+  },
+  {
+    "id": "py_005",
+    "topic": "Python",
+    "subtopic": "Generators",
+    "difficulty": "mid",
+    "question_type": "conceptual",
+    "question": "What is a generator?",
+    "expected_points": [
+      {"point": "a function that uses 'yield' to produce values lazily one at a time", "weight": 0.4},
+      {"point": "maintains state between calls instead of recomputing", "weight": 0.3},
+      {"point": "memory efficiency compared to returning a full list", "weight": 0.3}
+    ],
+    "sample_answer": null,
+    "tags": ["generators", "yield", "lazy-evaluation"],
+    "source": "curated_dataset"
+  },
+  {
+    "id": "py_006",
+    "topic": "Python",
+    "subtopic": "Generators",
+    "difficulty": "mid",
+    "question_type": "conceptual",
+    "question": "What is the difference between a generator and a list comprehension?",
+    "expected_points": [
+      {"point": "generator produces items lazily, list comprehension builds the whole list in memory", "weight": 0.5},
+      {"point": "generator uses () syntax, list comprehension uses []", "weight": 0.2},
+      {"point": "trade-off: memory vs re-usability (generators are exhausted after one pass)", "weight": 0.3}
+    ],
+    "sample_answer": null,
+    "tags": ["generators", "list-comprehension", "memory"],
+    "source": "curated_dataset"
+  },
+  {
+    "id": "py_007",
+    "topic": "Python",
+    "subtopic": "Decorators",
+    "difficulty": "mid",
+    "question_type": "conceptual",
+    "question": "What is a decorator in Python?",
+    "expected_points": [
+      {"point": "a function that wraps another function to extend its behavior without modifying it", "weight": 0.5},
+      {"point": "uses @decorator syntax as syntactic sugar", "weight": 0.2},
+      {"point": "common use cases: logging, timing, authentication, caching", "weight": 0.3}
+    ],
+    "sample_answer": null,
+    "tags": ["decorators", "higher-order-functions"],
+    "source": "curated_dataset"
+  },
+  {
+    "id": "py_008",
+    "topic": "Python",
+    "subtopic": "Context Managers",
+    "difficulty": "mid",
+    "question_type": "conceptual",
+    "question": "What is a context manager and how does 'with' work?",
+    "expected_points": [
+      {"point": "manages setup/teardown of resources automatically (e.g. file handles, locks)", "weight": 0.4},
+      {"point": "implements __enter__ and __exit__ methods", "weight": 0.4},
+      {"point": "guarantees cleanup even if an exception occurs", "weight": 0.2}
+    ],
+    "sample_answer": null,
+    "tags": ["context-managers", "with-statement"],
+    "source": "curated_dataset"
+  },
+  {
+    "id": "py_009",
+    "topic": "Python",
+    "subtopic": "Concurrency",
+    "difficulty": "mid",
+    "question_type": "conceptual",
+    "question": "What is the difference between multithreading and multiprocessing?",
+    "expected_points": [
+      {"point": "threading shares memory space, multiprocessing uses separate memory/processes", "weight": 0.35},
+      {"point": "GIL limits true parallel CPU-bound work in threading", "weight": 0.35},
+      {"point": "threading best for I/O-bound, multiprocessing best for CPU-bound tasks", "weight": 0.3}
+    ],
+    "sample_answer": null,
+    "tags": ["concurrency", "threading", "multiprocessing"],
+    "source": "curated_dataset"
+  },
+  {
+    "id": "py_010",
+    "topic": "Python",
+    "subtopic": "OOP",
+    "difficulty": "mid",
+    "question_type": "conceptual",
+    "question": "What is the difference between @staticmethod and @classmethod?",
+    "expected_points": [
+      {"point": "classmethod receives the class (cls) as first argument, can access/modify class state", "weight": 0.4},
+      {"point": "staticmethod receives no implicit first argument, behaves like a plain function inside the class", "weight": 0.4},
+      {"point": "example use case for each", "weight": 0.2}
+    ],
+    "sample_answer": null,
+    "tags": ["oop", "classmethod", "staticmethod"],
+    "source": "curated_dataset"
+  },
+  {
+    "id": "py_011",
+    "topic": "Python",
+    "subtopic": "Async",
+    "difficulty": "mid",
+    "question_type": "conceptual",
+    "question": "What is async/await used for?",
+    "expected_points": [
+      {"point": "writing non-blocking concurrent code, especially for I/O-bound operations", "weight": 0.4},
+      {"point": "await pauses execution of a coroutine without blocking the event loop", "weight": 0.35},
+      {"point": "practical example: concurrent API calls or database queries", "weight": 0.25}
+    ],
+    "sample_answer": null,
+    "tags": ["async", "await", "concurrency"],
+    "source": "curated_dataset"
+  },
+  {
+    "id": "py_012",
+    "topic": "Python",
+    "subtopic": "Concurrency",
+    "difficulty": "senior",
+    "question_type": "conceptual",
+    "question": "What is the GIL and how does it affect multithreading?",
+    "expected_points": [
+      {"point": "Global Interpreter Lock allows only one thread to execute Python bytecode at a time", "weight": 0.4},
+      {"point": "prevents true CPU-bound parallelism via threading in CPython", "weight": 0.3},
+      {"point": "workarounds: multiprocessing, asyncio, or C-extension release of the GIL", "weight": 0.3}
+    ],
+    "sample_answer": null,
+    "tags": ["gil", "concurrency", "cpython"],
+    "source": "curated_dataset"
+  },
+  {
+    "id": "py_013",
+    "topic": "Python",
+    "subtopic": "Performance",
+    "difficulty": "senior",
+    "question_type": "scenario",
+    "question": "How would you optimize slow Python code?",
+    "expected_points": [
+      {"point": "profile first to find actual bottlenecks (cProfile, line_profiler) before optimizing", "weight": 0.35},
+      {"point": "use vectorized operations (NumPy/Pandas) instead of Python loops where possible", "weight": 0.3},
+      {"point": "consider caching, algorithmic complexity improvements, or C extensions/multiprocessing for CPU-bound work", "weight": 0.35}
+    ],
+    "sample_answer": null,
+    "tags": ["performance", "profiling", "optimization"],
+    "source": "curated_dataset"
+  },
+  {
+    "id": "py_014",
+    "topic": "Python",
+    "subtopic": "Algorithms",
+    "difficulty": "senior",
+    "question_type": "coding",
+    "question": "Implement gradient descent for linear regression from scratch.",
+    "expected_points": [
+      {"point": "correctly computes predictions using weights and bias", "weight": 0.25},
+      {"point": "computes gradient of the loss function (e.g. MSE) with respect to parameters", "weight": 0.35},
+      {"point": "updates parameters using learning rate over iterations", "weight": 0.25},
+      {"point": "mentions convergence / stopping criteria", "weight": 0.15}
+    ],
+    "sample_answer": null,
+    "tags": ["algorithms", "gradient-descent", "coding"],
+    "source": "curated_dataset"
+  },
+  {
+    "id": "py_015",
+    "topic": "Python",
+    "subtopic": "Data Manipulation",
+    "difficulty": "mid",
+    "question_type": "conceptual",
+    "question": "What is the difference between merge, join, and concat in Pandas?",
+    "expected_points": [
+      {"point": "concat stacks DataFrames along an axis (rows or columns)", "weight": 0.3},
+      {"point": "merge combines DataFrames based on common columns (like SQL joins)", "weight": 0.35},
+      {"point": "join combines based on index by default", "weight": 0.35}
+    ],
+    "sample_answer": null,
+    "tags": ["pandas", "data-manipulation"],
+    "source": "curated_dataset"
+  },
+  {
+    "id": "llm_001",
+    "topic": "LLM",
+    "subtopic": "Fundamentals",
+    "difficulty": "junior",
+    "question_type": "conceptual",
+    "question": "What is a Transformer?",
+    "expected_points": [
+      {"point": "neural network architecture based on self-attention (not recurrence/convolution)", "weight": 0.5},
+      {"point": "processes sequences in parallel, enabling large-scale training", "weight": 0.3},
+      {"point": "foundation of modern LLMs (encoder/decoder or decoder-only variants)", "weight": 0.2}
+    ],
+    "sample_answer": null,
+    "tags": ["transformers", "architecture"],
+    "source": "curated_dataset"
+  },
+  {
+    "id": "llm_002",
+    "topic": "LLM",
+    "subtopic": "Fundamentals",
+    "difficulty": "junior",
+    "question_type": "conceptual",
+    "question": "What is a Large Language Model (LLM)?",
+    "expected_points": [
+      {"point": "a neural network (typically Transformer-based) trained on massive text data to model language", "weight": 0.5},
+      {"point": "capable of generating/understanding text via next-token prediction", "weight": 0.3},
+      {"point": "scale (parameters, data) is a key differentiator from earlier NLP models", "weight": 0.2}
+    ],
+    "sample_answer": null,
+    "tags": ["llm", "fundamentals"],
+    "source": "curated_dataset"
+  },
+  {
+    "id": "llm_003",
+    "topic": "LLM",
+    "subtopic": "Fundamentals",
+    "difficulty": "junior",
+    "question_type": "conceptual",
+    "question": "What are Embeddings in the context of LLMs?",
+    "expected_points": [
+      {"point": "numerical vector representations of text that capture semantic meaning", "weight": 0.5},
+      {"point": "similar meanings map to nearby vectors in the embedding space", "weight": 0.3},
+      {"point": "used for search, RAG, clustering, classification", "weight": 0.2}
+    ],
+    "sample_answer": null,
+    "tags": ["embeddings", "vectors"],
+    "source": "curated_dataset"
+  },
+  {
+    "id": "llm_004",
+    "topic": "LLM",
+    "subtopic": "Training",
+    "difficulty": "mid",
+    "question_type": "conceptual",
+    "question": "What are the stages of training an LLM (pretraining, fine-tuning, RLHF)?",
+    "expected_points": [
+      {"point": "pretraining: next-token prediction on massive unlabeled text corpus", "weight": 0.35},
+      {"point": "fine-tuning/instruction tuning: adapting on curated instruction-response pairs", "weight": 0.35},
+      {"point": "RLHF: aligning model outputs with human preferences using reinforcement learning", "weight": 0.3}
+    ],
+    "sample_answer": null,
+    "tags": ["training", "pretraining", "rlhf"],
+    "source": "curated_dataset"
+  },
+  {
+    "id": "llm_005",
+    "topic": "LLM",
+    "subtopic": "Training",
+    "difficulty": "mid",
+    "question_type": "conceptual",
+    "question": "What is Instruction Tuning?",
+    "expected_points": [
+      {"point": "fine-tuning a base model on examples of instructions paired with desired responses", "weight": 0.5},
+      {"point": "goal is to make the model follow user instructions rather than just complete text", "weight": 0.3},
+      {"point": "difference from a raw base/pretrained model", "weight": 0.2}
+    ],
+    "sample_answer": null,
+    "tags": ["instruction-tuning", "training"],
+    "source": "curated_dataset"
+  },
+  {
+    "id": "llm_006",
+    "topic": "LLM",
+    "subtopic": "RAG",
+    "difficulty": "mid",
+    "question_type": "conceptual",
+    "question": "What is RAG (Retrieval-Augmented Generation)?",
+    "expected_points": [
+      {"point": "combines a retrieval step (fetching relevant documents) with generation by an LLM", "weight": 0.45},
+      {"point": "grounds the model's response in external/up-to-date knowledge not in its training data", "weight": 0.35},
+      {"point": "reduces hallucination compared to relying purely on model memory", "weight": 0.2}
+    ],
+    "sample_answer": null,
+    "tags": ["rag", "retrieval"],
+    "source": "curated_dataset"
+  },
+  {
+    "id": "llm_007",
+    "topic": "LLM",
+    "subtopic": "RAG",
+    "difficulty": "mid",
+    "question_type": "conceptual",
+    "question": "What are the core components of a RAG system?",
+    "expected_points": [
+      {"point": "document ingestion/chunking pipeline", "weight": 0.25},
+      {"point": "embedding model to convert text/queries into vectors", "weight": 0.25},
+      {"point": "vector database for storage and similarity search", "weight": 0.25},
+      {"point": "LLM that generates the final answer using retrieved context", "weight": 0.25}
+    ],
+    "sample_answer": null,
+    "tags": ["rag", "architecture"],
+    "source": "curated_dataset"
+  },
+  {
+    "id": "llm_008",
+    "topic": "LLM",
+    "subtopic": "RAG",
+    "difficulty": "mid",
+    "question_type": "conceptual",
+    "question": "What is a Vector Database and why is it used with RAG?",
+    "expected_points": [
+      {"point": "specialized database optimized for storing and searching high-dimensional vectors", "weight": 0.4},
+      {"point": "enables fast approximate nearest-neighbor / semantic similarity search", "weight": 0.35},
+      {"point": "used in RAG to retrieve the most relevant chunks for a query", "weight": 0.25}
+    ],
+    "sample_answer": null,
+    "tags": ["vector-database", "rag"],
+    "source": "curated_dataset"
+  },
+  {
+    "id": "llm_009",
+    "topic": "LLM",
+    "subtopic": "RAG",
+    "difficulty": "mid",
+    "question_type": "conceptual",
+    "question": "What is Chunking in RAG systems and what are best practices?",
+    "expected_points": [
+      {"point": "splitting documents into smaller pieces before embedding, since embedding whole docs loses precision", "weight": 0.4},
+      {"point": "chunk size trade-off: too small loses context, too large dilutes relevance", "weight": 0.35},
+      {"point": "best practices: overlap between chunks, splitting on semantic boundaries (paragraphs/headers)", "weight": 0.25}
+    ],
+    "sample_answer": null,
+    "tags": ["rag", "chunking"],
+    "source": "curated_dataset"
+  },
+  {
+    "id": "llm_010",
+    "topic": "LLM",
+    "subtopic": "Reliability",
+    "difficulty": "mid",
+    "question_type": "conceptual",
+    "question": "What is Hallucination in LLMs?",
+    "expected_points": [
+      {"point": "when a model generates text that is factually incorrect or fabricated but sounds plausible", "weight": 0.5},
+      {"point": "happens because the model predicts statistically likely tokens, not verified facts", "weight": 0.3},
+      {"point": "example scenario where it commonly occurs", "weight": 0.2}
+    ],
+    "sample_answer": null,
+    "tags": ["hallucination", "reliability"],
+    "source": "curated_dataset"
+  },
+  {
+    "id": "llm_011",
+    "topic": "LLM",
+    "subtopic": "Fundamentals",
+    "difficulty": "mid",
+    "question_type": "conceptual",
+    "question": "What is a Context Window and how does it affect performance?",
+    "expected_points": [
+      {"point": "the maximum number of tokens (input + output) a model can process at once", "weight": 0.5},
+      {"point": "longer context allows more information but increases cost/latency", "weight": 0.3},
+      {"point": "information beyond the window is simply not visible to the model", "weight": 0.2}
+    ],
+    "sample_answer": null,
+    "tags": ["context-window", "tokens"],
+    "source": "curated_dataset"
+  },
+  {
+    "id": "llm_012",
+    "topic": "LLM",
+    "subtopic": "Agents",
+    "difficulty": "mid",
+    "question_type": "conceptual",
+    "question": "What is an LLM Agent and how does it differ from a regular chatbot?",
+    "expected_points": [
+      {"point": "an agent can plan, use tools/functions, and take multi-step actions to achieve a goal", "weight": 0.45},
+      {"point": "a regular chatbot just responds conversationally without taking external actions", "weight": 0.3},
+      {"point": "example: an agent that searches the web, calls an API, then summarizes results", "weight": 0.25}
+    ],
+    "sample_answer": null,
+    "tags": ["agents", "tool-use"],
+    "source": "curated_dataset"
+  },
+  {
+    "id": "llm_013",
+    "topic": "LLM",
+    "subtopic": "Alignment",
+    "difficulty": "senior",
+    "question_type": "conceptual",
+    "question": "What is RLHF (Reinforcement Learning from Human Feedback)?",
+    "expected_points": [
+      {"point": "training technique using human preference rankings to train a reward model", "weight": 0.4},
+      {"point": "the LLM is then fine-tuned using reinforcement learning to maximize the reward model's score", "weight": 0.4},
+      {"point": "goal: align model behavior with human values/preferences beyond raw next-token prediction", "weight": 0.2}
+    ],
+    "sample_answer": null,
+    "tags": ["rlhf", "alignment"],
+    "source": "curated_dataset"
+  },
+  {
+    "id": "llm_014",
+    "topic": "LLM",
+    "subtopic": "Reliability",
+    "difficulty": "senior",
+    "question_type": "scenario",
+    "question": "How can you reduce hallucination in LLM applications?",
+    "expected_points": [
+      {"point": "use RAG to ground responses in verified external sources", "weight": 0.3},
+      {"point": "lower temperature / constrain output format for factual tasks", "weight": 0.2},
+      {"point": "add citation requirements or fact-checking/verification steps", "weight": 0.25},
+      {"point": "prompt the model to say 'I don't know' when uncertain instead of guessing", "weight": 0.25}
+    ],
+    "sample_answer": null,
+    "tags": ["hallucination", "reliability", "rag"],
+    "source": "curated_dataset"
+  },
+  {
+    "id": "llm_015",
+    "topic": "LLM",
+    "subtopic": "Fine-tuning",
+    "difficulty": "senior",
+    "question_type": "conceptual",
+    "question": "Explain LoRA (Low-Rank Adaptation).",
+    "expected_points": [
+      {"point": "a parameter-efficient fine-tuning technique that freezes original model weights", "weight": 0.35},
+      {"point": "injects small trainable low-rank matrices into specific layers instead of updating all weights", "weight": 0.4},
+      {"point": "benefit: drastically reduces trainable parameters and memory/compute cost", "weight": 0.25}
+    ],
+    "sample_answer": null,
+    "tags": ["lora", "fine-tuning", "peft"],
+    "source": "curated_dataset"
+  }
+]
