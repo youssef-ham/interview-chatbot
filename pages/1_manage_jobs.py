@@ -1,10 +1,11 @@
 """
 صفحة إدارة الوظائف - صاحب الشركة بيضيف وظايف جديدة من هنا.
 """
+
 import streamlit as st
 from dotenv import load_dotenv
 
-from db.database import SessionLocal, Base, engine
+from db.database import Base, SessionLocal, engine
 from db.models import Job, Question
 
 load_dotenv()
@@ -34,8 +35,9 @@ st.subheader("إضافة وظيفة جديدة")
 
 with st.form("add_job_form", clear_on_submit=True):
     title = st.text_input("مسمى الوظيفة", placeholder="مثال: Backend Developer")
-    description = st.text_area("وصف الوظيفة", height=150,
-                                placeholder="اكتب متطلبات ومسؤوليات الوظيفة...")
+    description = st.text_area(
+        "وصف الوظيفة", height=150, placeholder="اكتب متطلبات ومسؤوليات الوظيفة..."
+    )
     required_topics = st.multiselect("المواضيع المطلوبة في المقابلة", get_available_topics())
     difficulty = st.selectbox("المستوى المطلوب", get_available_difficulties())
 

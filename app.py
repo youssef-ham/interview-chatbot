@@ -7,17 +7,24 @@
 تغييرات تنظيفية: توحيد أسلوب الوصول إلى الجلسة عبر db.get()، واستخدام init_db() عند البدء
 للتطبيق لتطبيق أي تحديث مخطط بسيط مُضمن في db/database.py.
 """
+
 import asyncio
 import os
-import streamlit as st
-from dotenv import load_dotenv
 from datetime import datetime
 
-from ai_service import generate_question, evaluate_answer, generate_report, generate_personalized_question
-from db.database import SessionLocal, init_db
-from db.models import Job, InterviewSession, Answer
-from cv_parser import extract_text_from_file
+import streamlit as st
+from dotenv import load_dotenv
+
+from ai_service import (
+    evaluate_answer,
+    generate_personalized_question,
+    generate_question,
+    generate_report,
+)
 from cv_analyzer import analyze_cv
+from cv_parser import extract_text_from_file
+from db.database import SessionLocal, init_db
+from db.models import Answer, InterviewSession, Job
 from retrieval import index_candidate_profile
 
 load_dotenv()
@@ -29,11 +36,11 @@ st.set_page_config(page_title="Interview Bot", page_icon="🎙️")
 init_db()
 
 # Adaptive stopping defaults (can be moved to env/config or admin UI later)
-PASS_THRESHOLD = float(os.getenv('PASS_THRESHOLD', '7'))
-CONSECUTIVE_SUCCESS = int(os.getenv('CONSECUTIVE_SUCCESS', '2'))
-FAIL_THRESHOLD = float(os.getenv('FAIL_THRESHOLD', '4'))
-CONSECUTIVE_FAIL = int(os.getenv('CONSECUTIVE_FAIL', '2'))
-MAX_QUESTIONS = int(os.getenv('MAX_QUESTIONS', '8'))
+PASS_THRESHOLD = float(os.getenv("PASS_THRESHOLD", "7"))
+CONSECUTIVE_SUCCESS = int(os.getenv("CONSECUTIVE_SUCCESS", "2"))
+FAIL_THRESHOLD = float(os.getenv("FAIL_THRESHOLD", "4"))
+CONSECUTIVE_FAIL = int(os.getenv("CONSECUTIVE_FAIL", "2"))
+MAX_QUESTIONS = int(os.getenv("MAX_QUESTIONS", "8"))
 
 
 def run_async(coro):
@@ -77,7 +84,7 @@ def format_rtl_text(text: str) -> str:
     """Wrap text in RTL Unicode markers so mixed Arabic/English renders correctly."""
     if not text:
         return text
-    return f"\u202B{text}\u202C"
+    return f"\u202b{text}\u202c"
 
 
 def get_progress_context() -> dict:
@@ -99,7 +106,13 @@ def get_progress_context() -> dict:
     }
 
 
-def save_current_answer(status: str, user_answer: str | None = None, score: float | None = None, missing_points: list | None = None, feedback: str | None = None):
+def save_current_answer(
+    status: str,
+    user_answer: str | None = None,
+    score: float | None = None,
+    missing_points: list | None = None,
+    feedback: str | None = None,
+):
     answer_id = st.session_state.get("current_answer_id")
     if not answer_id:
         return None
@@ -145,13 +158,17 @@ def finish_session(stop_reason: str | None, message: str) -> None:
 
 def skip_current_question() -> None:
     if st.session_state.get("current_question"):
-        st.session_state.answered_questions.append({
-            "question": st.session_state.current_question["question"],
-            "score": None,
-            "missing_points": [],
-            "skipped": True,
-        })
-        st.session_state.questions_asked_count = st.session_state.get("questions_asked_count", 0) + 1
+        st.session_state.answered_questions.append(
+            {
+                "question": st.session_state.current_question["question"],
+                "score": None,
+                "missing_points": [],
+                "skipped": True,
+            }
+        )
+        st.session_state.questions_asked_count = (
+            st.session_state.get("questions_asked_count", 0) + 1
+        )
         save_current_answer("skipped")
 
     st.session_state.current_question = None
@@ -192,11 +209,15 @@ if st.session_state.stage == "setup":
     selected_job = next(job for job in jobs if job.title == selected_title)
 
     st.write(selected_job.description)
-    st.caption(f"المواضيع: {', '.join(selected_job.required_topics)} | المستوى: {selected_job.difficulty}")
+    st.caption(
+        f"المواضيع: {', '.join(selected_job.required_topics)} | المستوى: {selected_job.difficulty}"
+    )
 
     cv_file = st.file_uploader("ارفع السيرة الذاتية (اختياري)", type=["pdf", "docx", "txt"])
 
-    st.markdown("**العدد سيُحدّد تلقائيًا بناءً على تقييم الإجابات؛ لا تحتاج لاختيار عدد الأسئلة.**")
+    st.markdown(
+        "**العدد سيُحدّد تلقائيًا بناءً على تقييم الإجابات؛ لا تحتاج لاختيار عدد الأسئلة.**"
+    )
 
     if st.button("ابدأ المقابلة", type="primary"):
         candidate_profile = None
@@ -293,8 +314,22 @@ elif st.session_state.stage == "question":
     st.progress(progress_context["percentage"] / 100)
     col1, col2, col3 = st.columns(3)
     col1.metric("التقدم", f"{progress_context['current']}/{progress_context['total']}")
-    col2.metric("متوسط الدرجات", f"{progress_context['avg_score']:.1f}/10" if progress_context["avg_score"] is not None else "—")
-    col3.metric("آخر درجة", f"{progress_context['last_score']:.1f}/10" if progress_context["last_score"] is not None else "—")
+    col2.metric(
+        "متوسط الدرجات",
+        (
+            f"{progress_context['avg_score']:.1f}/10"
+            if progress_context["avg_score"] is not None
+            else "—"
+        ),
+    )
+    col3.metric(
+        "آخر درجة",
+        (
+            f"{progress_context['last_score']:.1f}/10"
+            if progress_context["last_score"] is not None
+            else "—"
+        ),
+    )
 
     st.subheader("💬 السؤال الحالي")
     st.info(format_rtl_text(st.session_state.current_question["question"]))
@@ -330,20 +365,28 @@ elif st.session_state.stage == "question":
             feedback=evaluation.get("feedback", ""),
         )
 
-        st.session_state.answered_questions.append({
-            "question": st.session_state.current_question["question"],
-            "score": evaluation["score"],
-            "missing_points": evaluation["missing_points"],
-        })
+        st.session_state.answered_questions.append(
+            {
+                "question": st.session_state.current_question["question"],
+                "score": evaluation["score"],
+                "missing_points": evaluation["missing_points"],
+            }
+        )
         st.session_state.last_evaluation = evaluation
         score = float(evaluation.get("score", 0.0))
         st.session_state.recent_scores.append(score)
-        st.session_state.questions_asked_count = st.session_state.get("questions_asked_count", 0) + 1
+        st.session_state.questions_asked_count = (
+            st.session_state.get("questions_asked_count", 0) + 1
+        )
 
         db = SessionLocal()
         sess = db.get(InterviewSession, st.session_state.session_id)
         if sess:
-            all_scores = [a.get("score", 0.0) for a in st.session_state.answered_questions if a.get("score") is not None]
+            all_scores = [
+                a.get("score", 0.0)
+                for a in st.session_state.answered_questions
+                if a.get("score") is not None
+            ]
             agg = sum(all_scores) / len(all_scores) if all_scores else 0.0
             sess.aggregated_score = agg
 
@@ -376,7 +419,10 @@ elif st.session_state.stage == "question":
             if (sum(last_m) / len(last_m)) <= FAIL_THRESHOLD:
                 stop_reason = "reached_fail_pattern"
 
-        if stop_reason is None and st.session_state.questions_asked_count >= st.session_state.max_questions:
+        if (
+            stop_reason is None
+            and st.session_state.questions_asked_count >= st.session_state.max_questions
+        ):
             stop_reason = "reached_max_questions"
 
         if stop_reason:
@@ -401,8 +447,22 @@ elif st.session_state.stage == "answered":
     st.progress(progress_context["percentage"] / 100)
     col1, col2, col3 = st.columns(3)
     col1.metric("التقدم", f"{progress_context['current']}/{progress_context['total']}")
-    col2.metric("متوسط الدرجات", f"{progress_context['avg_score']:.1f}/10" if progress_context["avg_score"] is not None else "—")
-    col3.metric("آخر درجة", f"{progress_context['last_score']:.1f}/10" if progress_context["last_score"] is not None else "—")
+    col2.metric(
+        "متوسط الدرجات",
+        (
+            f"{progress_context['avg_score']:.1f}/10"
+            if progress_context["avg_score"] is not None
+            else "—"
+        ),
+    )
+    col3.metric(
+        "آخر درجة",
+        (
+            f"{progress_context['last_score']:.1f}/10"
+            if progress_context["last_score"] is not None
+            else "—"
+        ),
+    )
 
     ev = st.session_state.last_evaluation
     st.success("تم تقييم السؤال بنجاح")
@@ -471,7 +531,17 @@ elif st.session_state.stage == "report":
 
     st.markdown("---")
     if st.button("مقابلة جديدة", type="primary", use_container_width=True):
-        for key in ["stage", "answered_questions", "current_question", "final_report",
-                     "session_id", "current_answer_id", "asked_question_ids", "stop_message", "recent_scores", "questions_asked_count"]:
+        for key in [
+            "stage",
+            "answered_questions",
+            "current_question",
+            "final_report",
+            "session_id",
+            "current_answer_id",
+            "asked_question_ids",
+            "stop_message",
+            "recent_scores",
+            "questions_asked_count",
+        ]:
             st.session_state.pop(key, None)
         st.rerun()

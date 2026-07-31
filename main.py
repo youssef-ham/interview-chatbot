@@ -5,16 +5,22 @@ Backend API - بيعرض كل حاجة عملناها (الوظائف، المق
 شغّله بـ: uvicorn main:app --reload
 التوثيق التفاعلي هيبقى متاح على: http://localhost:8000/docs
 """
-from fastapi import FastAPI, Depends, HTTPException, UploadFile, File, Form
+
+from fastapi import Depends, FastAPI, File, Form, HTTPException, UploadFile
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
 from sqlalchemy.orm import Session
 
-from db.database import get_db, engine, init_db
-from db.models import Job, InterviewSession, Answer
-from ai_service import generate_question, generate_personalized_question, evaluate_answer, generate_report
-from cv_parser import extract_text_from_bytes
+from ai_service import (
+    evaluate_answer,
+    generate_personalized_question,
+    generate_question,
+    generate_report,
+)
 from cv_analyzer import analyze_cv
+from cv_parser import extract_text_from_bytes
+from db.database import get_db, init_db
+from db.models import Answer, InterviewSession, Job
 from retrieval import index_candidate_profile
 
 # انشئ الجداول وطبق تحديثات مخطط بسيطة عند بدء تشغيل الـ API.
@@ -181,7 +187,9 @@ async def next_question(session_id: int, topic_index: int, db: Session = Depends
             session_id=session.id,
         )
     else:
-        question = await generate_question(current_topic, session.difficulty, exclude_ids=already_asked)
+        question = await generate_question(
+            current_topic, session.difficulty, exclude_ids=already_asked
+        )
 
     answer_row = Answer(
         session_id=session_id,

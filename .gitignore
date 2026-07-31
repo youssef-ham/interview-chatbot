@@ -1,6 +1,14 @@
 venv/
+.venv/
 __pycache__/
 *.pyc
 .env
 .streamlit/
 *.egg-info/
+chroma_store/
+.chromadb/
+.pytest_cache/
+.ruff_cache/
+*.db
+*.sqlite3
+data/rerank_feedback.csv

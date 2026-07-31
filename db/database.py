@@ -1,7 +1,8 @@
 import os
+
 from dotenv import load_dotenv
 from sqlalchemy import create_engine, event, inspect, text
-from sqlalchemy.orm import sessionmaker, declarative_base
+from sqlalchemy.orm import declarative_base, sessionmaker
 
 load_dotenv()
 
@@ -10,11 +11,13 @@ connect_args = {"check_same_thread": False} if DATABASE_URL.startswith("sqlite")
 engine = create_engine(DATABASE_URL, connect_args=connect_args, echo=False)
 
 if DATABASE_URL.startswith("sqlite"):
+
     @event.listens_for(engine, "connect")
     def _enable_sqlite_fk(dbapi_connection, connection_record):
         cursor = dbapi_connection.cursor()
         cursor.execute("PRAGMA foreign_keys=ON")
         cursor.close()
+
 
 SessionLocal = sessionmaker(bind=engine, autoflush=False, autocommit=False)
 Base = declarative_base()
@@ -47,7 +50,9 @@ def ensure_interview_session_columns() -> None:
     with engine.begin() as conn:
         for column_name, column_type in required_columns.items():
             if column_name not in existing_columns:
-                conn.execute(text(f"ALTER TABLE interview_sessions ADD COLUMN {column_name} {column_type}"))
+                conn.execute(
+                    text(f"ALTER TABLE interview_sessions ADD COLUMN {column_name} {column_type}")
+                )
 
 
 def init_db() -> None:

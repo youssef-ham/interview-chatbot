@@ -9,4 +9,32 @@ dependencies = [
     "psycopg2-binary>=2.9.12",
     "python-dotenv>=1.2.2",
     "sqlalchemy>=2.0.51",
+    "chromadb>=1.5.0",
+    "sentence-transformers>=2.2.2",
+    "streamlit>=1.39.0",
+    "fastapi>=0.115.0",
+    "uvicorn[standard]>=0.34.0",
+    "python-multipart>=0.0.20",
+    "httpx>=0.28.0",
+    "pydantic>=2.10.0",
 ]
+
+[project.optional-dependencies]
+dev = [
+    "alembic>=1.18.0",
+    "black>=24.10.0",
+    "pytest>=8.3.0",
+    "ruff>=0.16.0",
+]
+
+[tool.black]
+line-length = 100
+target-version = ["py312"]
+
+[tool.ruff]
+line-length = 100
+target-version = "py312"
+
+[tool.ruff.lint]
+select = ["E", "F", "I"]
+ignore = ["E501"]
