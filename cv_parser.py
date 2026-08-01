@@ -12,8 +12,8 @@ def _extract_pdf(raw_bytes: bytes) -> str:
         from pypdf import PdfReader
     except ImportError as exc:
         raise ImportError(
-            "لا يمكن قراءة ملف PDF لأن مكتبة pypdf غير مثبتة. "
-            "ثبت pypdf أو ارفع ملف TXT بدلاً من PDF."
+            "Cannot read PDF because the 'pypdf' library is not installed. "
+            "Install 'pypdf' or upload a TXT resume instead."
         ) from exc
 
     reader = PdfReader(io.BytesIO(raw_bytes))
@@ -25,8 +25,8 @@ def _extract_docx(raw_bytes: bytes) -> str:
         import docx
     except ImportError as exc:
         raise ImportError(
-            "لا يمكن قراءة ملف DOCX لأن مكتبة python-docx غير مثبتة. "
-            "ثبت python-docx أو ارفع ملف TXT بدلاً من DOCX."
+            "Cannot read DOCX because the 'python-docx' library is not installed. "
+            "Install 'python-docx' or upload a TXT resume instead."
         ) from exc
 
     doc = docx.Document(io.BytesIO(raw_bytes))

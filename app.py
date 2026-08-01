@@ -21,7 +21,7 @@ from ai_service import (
 )
 from config import get_setting
 from cv_analyzer import analyze_cv
-from cv_parser import extract_text_from_file
+from cv_parser import extract_text_from_bytes, extract_text_from_file
 from db.database import SessionLocal, init_db
 from db.models import Answer, InterviewSession, Job
 from retrieval import index_candidate_profile
@@ -193,45 +193,108 @@ def main():
     st.title("🎙️ Interview Bot")
 
     # ---------------------------------------------------------------------------
-    # مرحلة الإعداد: اختيار وظيفة + رفع CV
+    # Setup stage: select job + upload CV
     # ---------------------------------------------------------------------------
     if st.session_state.stage == "setup":
         jobs = get_active_jobs()
 
         if not jobs:
-            st.warning("لا توجد وظائف متاحة حاليًا. راجع صفحة إدارة الوظائف.")
+            st.warning("No active jobs right now. Check the Manage Jobs page.")
             st.stop()
 
         job_titles = [job.title for job in jobs]
-        selected_title = st.selectbox("اختر الوظيفة اللي عايز تقدّم عليها", job_titles)
+        selected_title = st.selectbox("Select the job you want to apply for", job_titles)
         selected_job = next((job for job in jobs if job.title == selected_title), None)
         if selected_job is None:
             selected_job = jobs[0]
 
         st.write(selected_job.description)
         st.caption(
-            f"المواضيع: {', '.join(selected_job.required_topics)} | المستوى: {selected_job.difficulty}"
+            f"Topics: {', '.join(selected_job.required_topics)} | Level: {selected_job.difficulty}"
         )
 
-        cv_file = st.file_uploader("ارفع السيرة الذاتية (اختياري)", type=["pdf", "docx", "txt"])
+        cv_file = st.file_uploader("Upload resume (optional)", type=["pdf", "docx", "txt"])
+
+        # Persist uploaded file bytes in session_state so user can retry parsing after installing deps
+        if cv_file is not None:
+            try:
+                # read once and store
+                buf = cv_file.read()
+                st.session_state["cv_bytes"] = buf
+                st.session_state["cv_filename"] = cv_file.name
+                # Clear previous parse flags when a new file is uploaded
+                st.session_state.pop("cv_parse_failed", None)
+                st.session_state.pop("cv_parse_error", None)
+                # Also clear any previously stored candidate_profile to be conservative
+                st.session_state.pop("candidate_profile", None)
+            except Exception:
+                # Non-fatal: keep trying later
+                pass
+
+        # If there was a previous parse failure, show retry option
+        if st.session_state.get("cv_bytes") and st.session_state.get("cv_parse_failed"):
+            st.error(f"Previous CV parsing failed: {st.session_state.get('cv_parse_error')}")
+            if st.button("Retry parsing resume"):
+                try:
+                    cv_text = extract_text_from_bytes(
+                        st.session_state.get("cv_filename", "resume.txt"),
+                        st.session_state.get("cv_bytes", b""),
+                    )
+                    with st.spinner("Analyzing resume..."):
+                        parsed = run_async(analyze_cv(cv_text))
+                    st.session_state["candidate_profile"] = parsed
+                    st.session_state.pop("cv_parse_failed", None)
+                    st.success("Resume parsed successfully. Will be used for personalized questions.")
+                except Exception as e:
+                    st.session_state["cv_parse_failed"] = True
+                    st.session_state["cv_parse_error"] = str(e)
+                    st.error(f"Retry failed: {e}")
 
         st.markdown(
-            "**العدد سيُحدّد تلقائيًا بناءً على تقييم الإجابات؛ لا تحتاج لاختيار عدد الأسئلة.**"
+            "**The number of questions will be determined automatically based on answer evaluation; you do not need to choose it.**"
         )
 
-        if st.button("ابدأ المقابلة", type="primary"):
+        if st.button("Start Interview", type="primary"):
             candidate_profile = None
-            if cv_file is not None:
-                try:
-                    cv_text = extract_text_from_file(cv_file)
-                    with st.spinner("جاري تحليل السيرة الذاتية..."):
-                        candidate_profile = run_async(analyze_cv(cv_text))
-                except Exception as e:
-                    st.warning(
-                        "تعذّر قراءة أو تحليل السيرة الذاتية. سنكمل المقابلة بدون تحليل الـ CV. "
-                        f"إذا كنت تريد استخدام تحليل السيرة الذاتية، ثبت الحزم المطلوبة (pypdf و python-docx) أو ارفع ملف TXT. \nالسبب: {e}"
-                    )
-                    candidate_profile = None
+            # Prefer an already-parsed profile if available
+            if st.session_state.get("candidate_profile"):
+                candidate_profile = st.session_state.get("candidate_profile")
+            else:
+                # If user uploaded bytes but parsing hasn't been attempted or failed previously, try now
+                if st.session_state.get("cv_bytes"):
+                    try:
+                        cv_text = extract_text_from_bytes(
+                            st.session_state.get("cv_filename", "resume.txt"),
+                            st.session_state.get("cv_bytes", b""),
+                        )
+                        with st.spinner("Analyzing resume..."):
+                            candidate_profile = run_async(analyze_cv(cv_text))
+                        st.session_state["candidate_profile"] = candidate_profile
+                        st.session_state.pop("cv_parse_failed", None)
+                    except Exception as e:
+                        st.session_state["cv_parse_failed"] = True
+                        st.session_state["cv_parse_error"] = str(e)
+                        st.warning(
+                            "Unable to read or analyze the resume. Continuing without CV analysis. "
+                            f"To enable resume analysis, install the required packages (pypdf and python-docx) or upload a TXT file.\nReason: {e}"
+                        )
+                        candidate_profile = None
+                elif cv_file is not None:
+                    # Fallback to attempt parsing from the UploadedFile directly
+                    try:
+                        cv_text = extract_text_from_file(cv_file)
+                        with st.spinner("Analyzing resume..."):
+                            candidate_profile = run_async(analyze_cv(cv_text))
+                        st.session_state["candidate_profile"] = candidate_profile
+                        st.session_state.pop("cv_parse_failed", None)
+                    except Exception as e:
+                        st.session_state["cv_parse_failed"] = True
+                        st.session_state["cv_parse_error"] = str(e)
+                        st.warning(
+                            "Unable to read or analyze the resume. Continuing without CV analysis. "
+                            f"To enable resume analysis, install the required packages (pypdf and python-docx) or upload a TXT file.\nReason: {e}"
+                        )
+                        candidate_profile = None
 
             db = SessionLocal()
             db_session = InterviewSession(
@@ -273,7 +336,7 @@ def main():
             topics = st.session_state.job_topics
             current_topic = topics[(q_num - 1) % len(topics)]
 
-            with st.spinner("جاري تجهيز السؤال..."):
+            with st.spinner("Preparing question..."):
                 profile = st.session_state.get("candidate_profile")
                 if profile:
                     question = run_async(
@@ -316,9 +379,9 @@ def main():
         progress_context = get_progress_context()
         st.progress(progress_context["percentage"] / 100)
         col1, col2, col3 = st.columns(3)
-        col1.metric("التقدم", f"{progress_context['current']}/{progress_context['total']}")
+        col1.metric("Progress", f"{progress_context['current']}/{progress_context['total']}")
         col2.metric(
-            "متوسط الدرجات",
+            "Average Score",
             (
                 f"{progress_context['avg_score']:.1f}/10"
                 if progress_context["avg_score"] is not None
@@ -326,7 +389,7 @@ def main():
             ),
         )
         col3.metric(
-            "آخر درجة",
+            "Last Score",
             (
                 f"{progress_context['last_score']:.1f}/10"
                 if progress_context["last_score"] is not None
@@ -334,24 +397,24 @@ def main():
             ),
         )
 
-        st.subheader("💬 السؤال الحالي")
-        st.info(format_rtl_text(st.session_state.current_question["question"]))
+        st.subheader("💬 Current Question")
+        st.info(st.session_state.current_question["question"])
 
-        answer = st.text_area("إجابتك:", height=180, placeholder="اكتب إجابتك هنا...")
+        answer = st.text_area("Your answer:", height=180, placeholder="Type your answer here...")
 
         submitted = False
         action_col1, action_col2, action_col3 = st.columns([1.2, 1, 1])
         with action_col1:
-            submitted = st.button("ابعت الإجابة", type="primary", use_container_width=True)
+            submitted = st.button("Submit Answer", type="primary", use_container_width=True)
         with action_col2:
-            if st.button("⏭️ تخطي السؤال", use_container_width=True):
+            if st.button("⏭️ Skip Question", use_container_width=True):
                 skip_current_question()
         with action_col3:
-            if st.button("🛑 إنهاء المقابلة", use_container_width=True):
-                finish_session("user_ended", "انتهت المقابلة — سنراجع إجاباتك ونرجع لك بالتحديثات.")
+            if st.button("🛑 End Interview", use_container_width=True):
+                finish_session("user_ended", "The interview has ended — we will review your answers and get back to you.")
 
         if submitted and answer.strip():
-            with st.spinner("جاري التقييم..."):
+            with st.spinner("Evaluating..."):
                 evaluation = run_async(
                     evaluate_answer(
                         st.session_state.current_question["question"],
@@ -430,11 +493,11 @@ def main():
 
             if stop_reason:
                 if stop_reason == "reached_pass_threshold":
-                    message = "شكرًا — إجاباتك جيدة ومناسبة لمتطلبات هذه الوظيفة. سنراجعها ونوافيك بالتحديثات."
+                    message = "Thank you — your answers meet the requirements for this role. We will review them and get back to you."
                 elif stop_reason == "reached_fail_pattern":
-                    message = "شكراً على وقتك — سنراجع إجاباتك ونشارك الفريق المسؤول. سنوافيك بالتحديثات لاحقًا."
+                    message = "Thank you for your time — we will review your answers and share them with the hiring team. We will get back to you with updates."
                 else:
-                    message = "انتهت المقابلة — سنراجع إجاباتك ونرجع لك بالتحديثات."
+                    message = "The interview has ended — we will review your answers and get back to you." 
                 finish_session(stop_reason, message)
 
             st.session_state.current_question = None
@@ -468,13 +531,13 @@ def main():
         )
 
         ev = st.session_state.last_evaluation
-        st.success("تم تقييم السؤال بنجاح")
-        st.metric("الدرجة", f"{ev['score']}/10")
-        st.write("**نقاط ناقصة:**", ev["missing_points"])
-        st.write("**تعليق:**", ev["feedback"])
+        st.success("Question evaluated successfully")
+        st.metric("Score", f"{ev['score']}/10")
+        st.write("**Missing points:**", ev["missing_points"])
+        st.write("**Feedback:**", ev["feedback"])
 
         is_last = len(st.session_state.answered_questions) >= st.session_state.max_questions
-        label = "شوف التقرير" if is_last else "السؤال التالي"
+        label = "View Report" if is_last else "Next Question"
 
         if st.button(label, type="primary", use_container_width=True):
             st.session_state.stage = "report" if is_last else "question"
@@ -488,7 +551,7 @@ def main():
             st.info(st.session_state.get("stop_message"))
 
         if "final_report" not in st.session_state:
-            with st.spinner("جاري إعداد التقرير..."):
+            with st.spinner("Preparing report..."):
                 report = run_async(generate_report(st.session_state.answered_questions))
                 st.session_state.final_report = report
 
@@ -501,15 +564,15 @@ def main():
                 db.close()
 
         report = st.session_state.final_report
-        st.subheader("📋 التقرير النهائي")
+        st.subheader("📋 Final Report")
         st.markdown("---")
 
         col1, col2, col3 = st.columns(3)
-        col1.metric("الدرجة الإجمالية", f"{report['overall_score']}/10")
-        col2.metric("التوصية", report["recommendation"])
-        col3.metric("الحالة", "مكتمل")
+        col1.metric("Overall Score", f"{report['overall_score']}/10")
+        col2.metric("Recommendation", report["recommendation"])
+        col3.metric("Status", "Completed")
 
-        st.markdown("### الملخص")
+        st.markdown("### Summary")
         st.write(report["summary"])
 
         strengths = report.get("strengths", []) or []
@@ -517,23 +580,23 @@ def main():
 
         left_col, right_col = st.columns(2)
         with left_col:
-            st.markdown("### نقاط القوة")
+            st.markdown("### Strengths")
             if strengths:
                 for item in strengths:
                     st.success(f"• {item}")
             else:
-                st.caption("لا توجد نقاط قوية مذكورة")
+                st.caption("No strengths listed")
 
         with right_col:
-            st.markdown("### نقاط الضعف")
+            st.markdown("### Weaknesses")
             if weaknesses:
                 for item in weaknesses:
                     st.error(f"• {item}")
             else:
-                st.caption("لا توجد نقاط ضعف مذكورة")
+                st.caption("No weaknesses listed")
 
         st.markdown("---")
-        if st.button("مقابلة جديدة", type="primary", use_container_width=True):
+        if st.button("New Interview", type="primary", use_container_width=True):
             for key in [
                 "stage",
                 "answered_questions",

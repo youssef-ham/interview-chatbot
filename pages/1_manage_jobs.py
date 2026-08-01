@@ -14,7 +14,7 @@ from retrieval import index_single_job, index_single_question
 
 load_dotenv()
 
-st.set_page_config(page_title="إدارة الوظائف", page_icon="🗂️")
+st.set_page_config(page_title="Manage Jobs", page_icon="🗂️")
 
 Base.metadata.create_all(bind=engine)
 
@@ -105,27 +105,27 @@ def seed_questions_from_data() -> tuple[int, int]:
     return added, skipped
 
 
-st.title("🗂️ إدارة الوظائف")
+st.title("🗂️ Manage Jobs")
 
 question_count = count_questions()
 if question_count == 0:
     st.warning(
-        "قاعدة الأسئلة حالياً فاضية. اضغط الزر تحت لملء بنك الأسئلة الآلي من data/questions.json."
+        "The question bank is currently empty. Click the button below to populate the questions from data/questions.json."
     )
-    if st.button("أضف الأسئلة من بنك البيانات"):
+    if st.button("Add questions from data bank"):
         added, skipped = seed_questions_from_data()
         if added:
-            st.success(f"تمت إضافة {added} سؤالاً جديداً إلى قاعدة البيانات.")
+            st.success(f"Added {added} new questions to the database.")
         else:
-            st.info("مافيش أسئلة جديدة لإضافتها أو الملف غير موجود.")
+            st.info("No new questions to add or the file is missing.")
         st.experimental_rerun()
 
-st.subheader("إضافة وظيفة جديدة")
+st.subheader("Add New Job")
 
 with st.form("add_job_form", clear_on_submit=True):
-    title = st.text_input("مسمى الوظيفة", placeholder="مثال: Backend Developer")
+    title = st.text_input("Job Title", placeholder="e.g., Backend Developer")
     description = st.text_area(
-        "وصف الوظيفة", height=150, placeholder="اكتب متطلبات ومسؤوليات الوظيفة..."
+        "Job description", height=150, placeholder="Write job requirements and responsibilities..."
     )
 
     available_topics = get_available_topics()
@@ -133,32 +133,31 @@ with st.form("add_job_form", clear_on_submit=True):
 
     if not available_topics or not available_difficulties:
         st.info(
-            "مافيش بيانات أسئلة في قاعدة البيانات حالياً، فالقائمة دي اقتراحات فقط. "
-            "لو عايز تظهر لك المواضيع الحقيقية من بنك الأسئلة، أضف أسئلة أولاً."
+            "No question data in the database currently — this list shows default suggestions. "
+            "To populate real topics from the question bank, add questions first."
         )
 
     required_topics = st.multiselect(
-        "المواضيع المطلوبة في المقابلة",
+        "Required interview topics",
         available_topics or DEFAULT_TOPICS,
         help=(
-            "اختر أهم المواضيع اللي يتوقع أنها تظهر في المقابلة. "
-            "مثلاً Python، Data Structures، أو System Design."
+            "Select the main topics you expect in the interview, e.g. Python, Data Structures, System Design."
         ),
     )
     difficulty = st.selectbox(
-        "المستوى المطلوب",
+        "Required level",
         available_difficulties or DEFAULT_DIFFICULTIES,
         help=(
-            "اختر مستوى الوظيفة. junior للمبتدئين، mid للمتوسطين، senior للخبرة العالية. "
-            "استخدم intern للمتدرّبين و lead للمسؤوليات القيادية."
+            "Choose the role level: 'junior' for entry, 'mid' for intermediate, 'senior' for experienced. "
+            "Use 'intern' for trainees and 'lead' for leadership roles."
         ),
     )
 
-    submitted = st.form_submit_button("أضف الوظيفة", type="primary")
+    submitted = st.form_submit_button("Add Job", type="primary")
 
     if submitted:
         if not title or not description or not required_topics:
-            st.error("لازم تملأ كل الحقول")
+            st.error("Please fill in all required fields")
         else:
             db = SessionLocal()
             job = Job(
@@ -170,30 +169,29 @@ with st.form("add_job_form", clear_on_submit=True):
             )
             db.add(job)
             db.commit()
-            db.refresh(job)  # نجيب الـ id والقيم المُحدّثة قبل ما نستخدمها في الفهرسة
+            db.refresh(job)  # refresh to get id and updated fields before indexing
 
-            # نفهرس الوظيفة فورًا في Chroma - قبل ما نقفل الـ session
-            # (لازم يحصل قبل db.close() عشان القيم expired من غير session نشط)
+            # Index the job in Chroma immediately (before closing session)
             try:
                 index_single_job(job)
             except Exception as e:
-                st.warning(f"الوظيفة اتضافت، لكن فشلت فهرستها للبحث الذكي: {e}")
+                st.warning(f"Job added, but failed to index for semantic search: {e}")
 
             db.close()
-            st.success(f"تمت إضافة وظيفة '{title}' بنجاح")
+            st.success(f"Job '{title}' added successfully")
             st.rerun()
 
 st.divider()
-st.subheader("الوظائف الحالية")
+st.subheader("Current Jobs")
 
 db = SessionLocal()
 jobs = db.query(Job).order_by(Job.created_at.desc()).all()
 db.close()
 
 if not jobs:
-    st.info("لسه مفيش وظايف مضافة")
+    st.info("No jobs have been added yet")
 else:
     for job in jobs:
         with st.expander(f"{job.title} — {job.difficulty}"):
             st.write(job.description)
-            st.caption(f"المواضيع: {', '.join(job.required_topics)}")
+            st.caption(f"Topics: {', '.join(job.required_topics)}")
