@@ -42,7 +42,7 @@ python -m pip install --upgrade pip
 python -m pip install -r requirements.txt
 ```
 
-> Note: Resume upload supports `TXT`, `PDF`, and `DOCX` resumes. Required parser libraries are installed by default via `requirements.txt`.
+> Note: Resume upload supports `TXT`, `PDF`, and `DOCX` resumes. The required parser libraries are included in `requirements.txt` so Streamlit Cloud installs them automatically on deploy.
 
 For development dependencies:
 
