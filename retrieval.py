@@ -6,12 +6,15 @@
 import csv
 import datetime
 from pathlib import Path
-from typing import Any
+from typing import TYPE_CHECKING, Any
 
 from config import get_setting
 from db.database import SessionLocal
 from db.models import Job, Question
 from reranker import rerank_documents
+
+if TYPE_CHECKING:
+    from sentence_transformers import SentenceTransformer
 
 _chromadb_import_error = None
 try:
@@ -35,7 +38,7 @@ RERANKER_TOP_N = int(get_setting("RERANKER_TOP_N", "20"))
 RERANK_FUSION_ALPHA = float(get_setting("RERANK_FUSION_ALPHA", "0.7"))
 RERANK_FEEDBACK_FILE = get_setting("RERANK_FEEDBACK_FILE", "./data/rerank_feedback.csv")
 
-_embedding_model: SentenceTransformer | None = None
+_embedding_model: Any = None
 _client: Any = None
 
 
