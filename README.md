@@ -144,7 +144,7 @@ alembic revision --autogenerate -m "وصف التغيير"
 
 ## الاستضافة على Streamlit Cloud
 
-للتشغيل على Streamlit Cloud، أضف القيم التالية في Secrets:
+للتشغيل على Streamlit Cloud بسرعة باستخدام SQLite المحلي، أضف القيم التالية في Secrets:
 
 ```toml
 GROQ_API_KEY = "your_groq_api_key"
@@ -158,6 +158,8 @@ FAIL_THRESHOLD = 4
 CONSECUTIVE_FAIL = 2
 MAX_QUESTIONS = 8
 ```
+
+إذا كنت تستخدم PostgreSQL محليًا للتطوير، احتفظ بإعداد `DATABASE_URL` في ملف `.env` المحلي أو في بيئتك المحلية كما هو. الكود الآن يدعم التشغيل المحلي بـ PostgreSQL وفي Cloud بـ SQLite كخيار سريع.
 
 الملف `streamlit_cloud.env.example` يوضح نفس الإعدادات بصيغة جاهزة للنسخ.
 
