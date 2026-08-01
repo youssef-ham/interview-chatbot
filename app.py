@@ -9,11 +9,9 @@
 """
 
 import asyncio
-import os
 from datetime import datetime
 
 import streamlit as st
-from dotenv import load_dotenv
 
 from ai_service import (
     evaluate_answer,
@@ -21,13 +19,12 @@ from ai_service import (
     generate_question,
     generate_report,
 )
+from config import get_setting
 from cv_analyzer import analyze_cv
 from cv_parser import extract_text_from_file
 from db.database import SessionLocal, init_db
 from db.models import Answer, InterviewSession, Job
 from retrieval import index_candidate_profile
-
-load_dotenv()
 
 st.set_page_config(page_title="Interview Bot", page_icon="🎙️")
 # Apply lightweight DB migrations / create tables if missing.
@@ -36,11 +33,11 @@ st.set_page_config(page_title="Interview Bot", page_icon="🎙️")
 init_db()
 
 # Adaptive stopping defaults (can be moved to env/config or admin UI later)
-PASS_THRESHOLD = float(os.getenv("PASS_THRESHOLD", "7"))
-CONSECUTIVE_SUCCESS = int(os.getenv("CONSECUTIVE_SUCCESS", "2"))
-FAIL_THRESHOLD = float(os.getenv("FAIL_THRESHOLD", "4"))
-CONSECUTIVE_FAIL = int(os.getenv("CONSECUTIVE_FAIL", "2"))
-MAX_QUESTIONS = int(os.getenv("MAX_QUESTIONS", "8"))
+PASS_THRESHOLD = float(get_setting("PASS_THRESHOLD", "7"))
+CONSECUTIVE_SUCCESS = int(get_setting("CONSECUTIVE_SUCCESS", "2"))
+FAIL_THRESHOLD = float(get_setting("FAIL_THRESHOLD", "4"))
+CONSECUTIVE_FAIL = int(get_setting("CONSECUTIVE_FAIL", "2"))
+MAX_QUESTIONS = int(get_setting("MAX_QUESTIONS", "8"))
 
 
 def run_async(coro):
@@ -232,6 +229,7 @@ if st.session_state.stage == "setup":
 
         db = SessionLocal()
         db_session = InterviewSession(
+            job_id=selected_job.id,  # كان ناقص - بدونه معندناش رابط بين الجلسة والوظيفة
             topic=", ".join(selected_job.required_topics),
             difficulty=selected_job.difficulty,
             status="in_progress",

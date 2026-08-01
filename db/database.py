@@ -1,12 +1,9 @@
-import os
-
-from dotenv import load_dotenv
 from sqlalchemy import create_engine, event, inspect, text
 from sqlalchemy.orm import declarative_base, sessionmaker
 
-load_dotenv()
+from config import get_setting
 
-DATABASE_URL = os.getenv("DATABASE_URL", "sqlite:///./interview_bot.db")
+DATABASE_URL = get_setting("DATABASE_URL", "sqlite:///./interview_bot.db")
 connect_args = {"check_same_thread": False} if DATABASE_URL.startswith("sqlite") else {}
 engine = create_engine(DATABASE_URL, connect_args=connect_args, echo=False)
 
@@ -58,12 +55,12 @@ def ensure_interview_session_columns() -> None:
 def init_db() -> None:
     """Create any missing tables and apply lightweight schema updates.
 
-    This is a deliberately lightweight migration helper used during development
-    and small deployments. It creates missing tables (via SQLAlchemy metadata)
-    and adds any missing columns required by the adaptive interview flow.
+    هذا هو نظام إدارة الـ schema الوحيد المعتمد في المشروع (تم اتخاذ قرار
+    بعدم استخدام Alembic حاليًا لأن المشروع لسه في التطوير وفريق صغير).
 
-    Note: For production deployments prefer a dedicated migration system
-    (Alembic) to manage complex schema changes and rollbacks.
+    لو الحاجة لإدارة schema أكثر تعقيدًا ظهرت مستقبلًا (بيانات إنتاج حقيقية،
+    أكتر من مطور بيغيّر الـ schema بالتوازي، حاجة لـ rollback منظم)،
+    يستاهل وقتها نراجع القرار ده ونضيف Alembic من جديد.
     """
     from db.models import Base as ModelsBase
 

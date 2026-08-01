@@ -6,6 +6,8 @@ Backend API - بيعرض كل حاجة عملناها (الوظائف، المق
 التوثيق التفاعلي هيبقى متاح على: http://localhost:8000/docs
 """
 
+from datetime import datetime
+
 from fastapi import Depends, FastAPI, File, Form, HTTPException, UploadFile
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
@@ -17,17 +19,26 @@ from ai_service import (
     generate_question,
     generate_report,
 )
+from config import get_setting
 from cv_analyzer import analyze_cv
 from cv_parser import extract_text_from_bytes
 from db.database import get_db, init_db
 from db.models import Answer, InterviewSession, Job
-from retrieval import index_candidate_profile
+from retrieval import index_candidate_profile, index_single_job
 
 # انشئ الجداول وطبق تحديثات مخطط بسيطة عند بدء تشغيل الـ API.
 # نستخدم نفس حل الترحيل الخفيف الموجود في db/database.py
 init_db()
 
 app = FastAPI(title="Interview Bot API")
+
+# إعدادات التوقف التكيفي - نفس القيم والمنطق المستخدم في app.py (Streamlit)
+# عشان الـ API والواجهة التجريبية يفضلوا متسقين مع بعض
+PASS_THRESHOLD = float(get_setting("PASS_THRESHOLD", "7"))
+CONSECUTIVE_SUCCESS = int(get_setting("CONSECUTIVE_SUCCESS", "2"))
+FAIL_THRESHOLD = float(get_setting("FAIL_THRESHOLD", "4"))
+CONSECUTIVE_FAIL = int(get_setting("CONSECUTIVE_FAIL", "2"))
+MAX_QUESTIONS = int(get_setting("MAX_QUESTIONS", "8"))
 
 # CORS: بيسمح لأي frontend شغال على domain مختلف (زي localhost:3000) يكلم الـ API ده
 app.add_middleware(
@@ -64,6 +75,59 @@ class AnswerSubmit(BaseModel):
     answer_text: str
 
 
+def compute_stop_status(session_id: int, db: Session) -> dict:
+    """
+    بتحسب حالة التوقف التكيفي بناءً على كل الإجابات المُقيّمة في الجلسة دي،
+    مقروءة مباشرة من الـ database (مش من ذاكرة مؤقتة) - عشان الـ API يفضل stateless.
+    نفس منطق app.py بالظبط، لكن هنا بيتحسب من جديد كل مرة من مصدر الحقيقة (answers table).
+    """
+    evaluated = (
+        db.query(Answer)
+        .filter_by(session_id=session_id, status="evaluated")
+        .order_by(Answer.id.asc())
+        .all()
+    )
+    scores = [a.score for a in evaluated if a.score is not None]
+
+    aggregated_score = sum(scores) / len(scores) if scores else 0.0
+
+    consecutive_success = 0
+    for s in reversed(scores):
+        if s >= PASS_THRESHOLD:
+            consecutive_success += 1
+        else:
+            break
+
+    consecutive_fail = 0
+    for s in reversed(scores):
+        if s <= FAIL_THRESHOLD:
+            consecutive_fail += 1
+        else:
+            break
+
+    stop_reason = None
+    if len(scores) >= CONSECUTIVE_SUCCESS:
+        last_n = scores[-CONSECUTIVE_SUCCESS:]
+        if (sum(last_n) / len(last_n)) >= PASS_THRESHOLD:
+            stop_reason = "reached_pass_threshold"
+
+    if stop_reason is None and len(scores) >= CONSECUTIVE_FAIL:
+        last_m = scores[-CONSECUTIVE_FAIL:]
+        if (sum(last_m) / len(last_m)) <= FAIL_THRESHOLD:
+            stop_reason = "reached_fail_pattern"
+
+    if stop_reason is None and len(scores) >= MAX_QUESTIONS:
+        stop_reason = "reached_max_questions"
+
+    return {
+        "aggregated_score": aggregated_score,
+        "consecutive_success_count": consecutive_success,
+        "consecutive_fail_count": consecutive_fail,
+        "should_stop": stop_reason is not None,
+        "stop_reason": stop_reason,
+    }
+
+
 # ---------------------------------------------------------------------------
 # الوظائف (Jobs)
 # ---------------------------------------------------------------------------
@@ -95,6 +159,15 @@ def create_job(job_data: JobCreate, db: Session = Depends(get_db)):
     db.add(job)
     db.commit()
     db.refresh(job)
+
+    # نفهرس الوظيفة فورًا في Chroma - بدل ما نستنى تشغيل سكريبت يدوي
+    try:
+        index_single_job(job)
+    except Exception as e:
+        # لو الفهرسة فشلت (مثلاً Chroma مش شغال)، الوظيفة نفسها لسه اتضافت صح في Postgres
+        # بس مش هتظهر في نتائج RAG لحد ما يتم فهرستها لاحقًا - نسجل التحذير عشان نلاحظه
+        print(f"تحذير: فشلت فهرسة الوظيفة {job.id} في Chroma: {e}")
+
     return job
 
 
@@ -161,6 +234,12 @@ async def next_question(session_id: int, topic_index: int, db: Session = Depends
     if session is None:
         raise HTTPException(status_code=404, detail="الجلسة غير موجودة")
 
+    if session.status != "in_progress":
+        raise HTTPException(
+            status_code=409,
+            detail=f"الجلسة دي خلصت بالفعل (السبب: {session.stopped_reason or 'completed'})",
+        )
+
     topics = [t.strip() for t in session.topic.split(",")]
     current_topic = topics[topic_index % len(topics)]
 
@@ -226,10 +305,26 @@ async def submit_answer(session_id: int, payload: AnswerSubmit, db: Session = De
     answer_row.status = "evaluated"
     db.commit()
 
+    # نحسب حالة التوقف التكيفي ونحدّث الجلسة بيها (نفس منطق app.py)
+    stop_status = compute_stop_status(session_id, db)
+    session = db.get(InterviewSession, session_id)
+    if session:
+        session.aggregated_score = stop_status["aggregated_score"]
+        session.consecutive_success_count = stop_status["consecutive_success_count"]
+        session.consecutive_fail_count = stop_status["consecutive_fail_count"]
+        if stop_status["should_stop"]:
+            session.stopped_reason = stop_status["stop_reason"]
+            session.stopped_at = datetime.utcnow()
+            session.status = "completed"
+        db.commit()
+
     return {
         "score": evaluation["score"],
         "missing_points": evaluation["missing_points"],
         "feedback": evaluation["feedback"],
+        "should_stop": stop_status["should_stop"],
+        "stop_reason": stop_status["stop_reason"],
+        "aggregated_score": stop_status["aggregated_score"],
     }
 
 

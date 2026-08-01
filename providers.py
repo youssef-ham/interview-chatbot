@@ -1,9 +1,6 @@
-import os
-
-from dotenv import load_dotenv
 from groq import AsyncGroq
 
-load_dotenv()
+from config import get_setting
 
 CLIENT: AsyncGroq | None = None
 
@@ -11,7 +8,7 @@ CLIENT: AsyncGroq | None = None
 def get_groq_client() -> AsyncGroq:
     global CLIENT
     if CLIENT is None:
-        api_key = os.getenv("GROQ_API_KEY")
+        api_key = get_setting("GROQ_API_KEY")
         if not api_key:
             raise RuntimeError("Missing GROQ_API_KEY environment variable")
         CLIENT = AsyncGroq(api_key=api_key)

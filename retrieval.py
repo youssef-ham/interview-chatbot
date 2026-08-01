@@ -5,7 +5,6 @@
 
 import csv
 import datetime
-import os
 from pathlib import Path
 from typing import Any
 
@@ -13,16 +12,17 @@ from chromadb import Client
 from chromadb.config import Settings
 from sentence_transformers import SentenceTransformer
 
+from config import get_setting
 from db.database import SessionLocal
 from db.models import Job, Question
 from reranker import rerank_documents
 
-PERSIST_DIRECTORY = os.getenv("CHROMA_PERSIST_DIR", "./chroma_store")
-EMBEDDING_MODEL_NAME = os.getenv("EMBEDDING_MODEL_NAME", "all-MiniLM-L6-v2")
-COLLECTION_NAME = os.getenv("CHROMA_COLLECTION_NAME", "interview_documents")
-RERANKER_TOP_N = int(os.getenv("RERANKER_TOP_N", "20"))
-RERANK_FUSION_ALPHA = float(os.getenv("RERANK_FUSION_ALPHA", "0.7"))
-RERANK_FEEDBACK_FILE = os.getenv("RERANK_FEEDBACK_FILE", "./data/rerank_feedback.csv")
+PERSIST_DIRECTORY = get_setting("CHROMA_PERSIST_DIR", "./chroma_store")
+EMBEDDING_MODEL_NAME = get_setting("EMBEDDING_MODEL_NAME", "all-MiniLM-L6-v2")
+COLLECTION_NAME = get_setting("CHROMA_COLLECTION_NAME", "interview_documents")
+RERANKER_TOP_N = int(get_setting("RERANKER_TOP_N", "20"))
+RERANK_FUSION_ALPHA = float(get_setting("RERANK_FUSION_ALPHA", "0.7"))
+RERANK_FEEDBACK_FILE = get_setting("RERANK_FEEDBACK_FILE", "./data/rerank_feedback.csv")
 
 _embedding_model: SentenceTransformer | None = None
 _client: Any = None
@@ -133,14 +133,19 @@ def build_profile_text(candidate_profile: dict) -> str:
 
 
 def build_query_text(
-    topic: str, candidate_profile: dict | None, candidate_keywords: list[str]
+    topic: str,
+    candidate_profile: dict | None,
+    candidate_keywords: list[str],
+    job_context: str | None = None,
 ) -> str:
     profile_text = build_profile_text(candidate_profile or {})
-    base = [topic]
+    base = [f"الموضوع: {topic}"]
+    if job_context:
+        base.append(f"سياق الوظيفة:\n{job_context}")
     if candidate_keywords:
-        base.append(" ".join(candidate_keywords))
+        base.append(f"الكلمات المفتاحية: {' '.join(candidate_keywords)}")
     if profile_text:
-        base.append(profile_text)
+        base.append(f"بيانات المرشح:\n{profile_text}")
     return "\n".join(base).strip()
 
 
@@ -193,7 +198,7 @@ def index_question_bank():
         )
 
     embeddings = embed_texts(texts)
-    collection.add(
+    collection.upsert(
         ids=ids,
         documents=texts,
         metadatas=metadatas,
@@ -234,11 +239,70 @@ def index_job_descriptions():
         )
 
     embeddings = embed_texts(texts)
-    collection.add(
+    collection.upsert(
         ids=ids,
         documents=texts,
         metadatas=metadatas,
         embeddings=embeddings,
+    )
+    try:
+        client.persist()
+    except Exception:
+        pass
+
+
+def index_single_question(question) -> None:
+    """
+    فهرسة سؤال واحد بس - بتتنادى فورًا لحظة إضافة السؤال (من seed_questions.py مثلًا)
+    بدل ما نستنى تشغيل index_documents.py يدوي على كل البنك.
+    """
+    client = get_chroma_client()
+    collection = get_collection()
+
+    text = build_question_text(question)
+    embedding = embed_texts([text])[0]
+
+    collection.upsert(
+        ids=[f"question_{question.id}"],
+        documents=[text],
+        metadatas=[
+            {
+                "source": "question",
+                "question_id": question.id,
+                "topic": question.topic,
+                "difficulty": question.difficulty,
+                "tags": question.tags or [],
+            }
+        ],
+        embeddings=[embedding],
+    )
+    try:
+        client.persist()
+    except Exception:
+        pass
+
+
+def index_single_job(job) -> None:
+    """فهرسة وظيفة واحدة بس - بتتنادى فورًا لحظة إضافة الوظيفة من الـ API أو صفحة الإدارة"""
+    client = get_chroma_client()
+    collection = get_collection()
+
+    text = build_job_text(job)
+    embedding = embed_texts([text])[0]
+
+    collection.upsert(
+        ids=[f"job_{job.id}"],
+        documents=[text],
+        metadatas=[
+            {
+                "source": "job",
+                "job_id": job.id,
+                "topic": ", ".join(job.required_topics or []),
+                "difficulty": job.difficulty,
+                "title": job.title,
+            }
+        ],
+        embeddings=[embedding],
     )
     try:
         client.persist()
@@ -256,7 +320,7 @@ def index_candidate_profile(session_id: int | str, candidate_profile: dict):
     text = build_profile_text(candidate_profile)
     embedding = embed_texts([text])[0]
 
-    collection.add(
+    collection.upsert(
         ids=[doc_id],
         documents=[text],
         metadatas=[
@@ -285,6 +349,7 @@ def find_best_matching_question(
     k: int = 5,
     candidate_profile: dict | None = None,
     session_id: int | str | None = None,
+    job_context: str | None = None,
 ) -> list[dict[str, Any]]:
     """
     يبحث في الفهرس عن أفضل الأسئلة المتطابقة مع مهارات المرشح.
@@ -292,7 +357,17 @@ def find_best_matching_question(
     """
     exclude_ids = exclude_ids or []
     collection = get_collection()
-    query_text = build_query_text(topic, candidate_profile, candidate_keywords)
+    query_text = build_query_text(topic, candidate_profile, candidate_keywords, job_context)
+
+    def _query_with_filter(filter_metadata: dict[str, Any]) -> dict[str, Any]:
+        query_embedding = embed_texts([query_text])[0]
+        return collection.query(
+            query_embeddings=[query_embedding],
+            n_results=RERANKER_TOP_N + len(exclude_ids),
+            where=filter_metadata,
+            include=["documents", "metadatas", "distances"],
+        )
+
     filter_metadata = {
         "$and": [
             {"source": "question"},
@@ -301,13 +376,17 @@ def find_best_matching_question(
         ]
     }
 
-    query_embedding = embed_texts([query_text])[0]
-    results = collection.query(
-        query_embeddings=[query_embedding],
-        n_results=RERANKER_TOP_N + len(exclude_ids),
-        where=filter_metadata,
-        include=["documents", "metadatas", "distances"],
-    )
+    results = _query_with_filter(filter_metadata)
+
+    ids = results.get("ids", [[]])[0]
+    if not ids:
+        fallback_filter = {
+            "$and": [
+                {"source": "question"},
+                {"topic": topic},
+            ]
+        }
+        results = _query_with_filter(fallback_filter)
 
     ids = results.get("ids", [[]])[0]
     metadatas = results.get("metadatas", [[]])[0]

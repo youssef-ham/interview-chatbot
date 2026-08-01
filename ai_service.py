@@ -4,12 +4,12 @@
 """
 
 import json
-import random
 import re
 
 from db.database import SessionLocal
-from db.models import Question
+from db.models import InterviewSession, Job
 from providers import generate
+from retrieval import build_job_text, find_best_matching_question
 
 
 def clean_json(raw_text: str) -> dict:
@@ -21,38 +21,6 @@ def clean_json(raw_text: str) -> dict:
         if json_block:
             return json.loads(json_block.group(0))
         raise
-
-
-# ---------------------------------------------------------------------------
-# جديد: جيب سؤال حقيقي من بنك الأسئلة بدل ما الموديل يخترعه
-# ---------------------------------------------------------------------------
-def get_question_from_bank(topic: str, difficulty: str, exclude_ids: list = None) -> dict | None:
-    """
-    بتدور في جدول questions عن سؤال بنفس الموضوع والمستوى، ومش من ضمن
-    اللي اتسألوا قبل كده في نفس الجلسة (exclude_ids).
-    بترجع None لو مفيش سؤال متاح (عشان نعرف نرجع لخطة بديلة).
-    """
-    exclude_ids = exclude_ids or []
-    db = SessionLocal()
-
-    query = db.query(Question).filter_by(topic=topic, difficulty=difficulty)
-    if exclude_ids:
-        query = query.filter(~Question.id.in_(exclude_ids))
-
-    candidates = query.all()
-    db.close()
-
-    if not candidates:
-        return None
-
-    chosen = random.choice(candidates)
-    return {
-        "id": chosen.id,
-        "question": chosen.question,
-        # بنسيب النقاط بشكلها الكامل [{"point": "...", "weight": 0.4}, ...]
-        # عشان نستخدم الوزن فعليًا وقت التقييم، مش بس النص
-        "expected_points": chosen.expected_points,
-    }
 
 
 QUESTION_SYSTEM_PROMPT = """أنت interviewer تقني محترف.
@@ -69,25 +37,26 @@ QUESTION_SYSTEM_PROMPT = """أنت interviewer تقني محترف.
 
 async def generate_question(topic: str, difficulty: str, exclude_ids: list = None) -> dict:
     """
-    بتحاول الأول تجيب سؤال حقيقي من بنك الأسئلة (get_question_from_bank).
-    لو مفيش سؤال متاح، بترجع لتوليد سؤال بالموديل كخطة بديلة.
+    بتحاول أولًا تجيب سؤال حقيقي من بنك الأسئلة باستخدام استرجاع RAG.
+    لو مفيش سؤال مناسب، بترجع لتوليد سؤال بالموديل كخطة بديلة.
     لو السؤال جاي من البنك، بنستخدم نفس آلية إعادة الصياغة بالعربية فقط
     حتى لو كان نص السؤال الأصلي بالإنجليزية.
     """
-    bank_question = get_question_from_bank(topic, difficulty, exclude_ids)
-    if bank_question is not None:
+    matches = find_best_matching_question(topic, difficulty, [], exclude_ids)
+    if matches:
+        selected = matches[0]
         try:
             from question_rewriter import rewrite_question
 
-            bank_question["question"] = await rewrite_question(
-                bank_question["question"],
+            selected["question"] = await rewrite_question(
+                selected["question"],
                 {},
-                reference_questions=[bank_question],
+                reference_questions=matches[:3],
                 previous_answers=[],
             )
         except Exception:
             pass
-        return bank_question
+        return selected
 
     # خطة بديلة: مفيش أسئلة متاحة في البنك، نولّد واحد بالموديل
     user_prompt = f"الموضوع: {topic}\nالمستوى: {difficulty}\nولّد سؤال واحد الآن."
@@ -186,6 +155,18 @@ async def generate_personalized_question(
         + candidate_profile.get("programming_languages", [])
     )
 
+    job_context = ""
+    if session_id:
+        db = SessionLocal()
+        try:
+            session = db.get(InterviewSession, session_id)
+            if session and session.job_id:
+                job = db.get(Job, session.job_id)
+                if job:
+                    job_context = build_job_text(job)
+        finally:
+            db.close()
+
     matches = find_best_matching_question(
         topic,
         difficulty,
@@ -193,6 +174,7 @@ async def generate_personalized_question(
         exclude_ids,
         candidate_profile=candidate_profile,
         session_id=session_id,
+        job_context=job_context,
     )
 
     if not matches:

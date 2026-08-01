@@ -7,6 +7,7 @@ from dotenv import load_dotenv
 
 from db.database import Base, SessionLocal, engine
 from db.models import Job, Question
+from retrieval import index_single_job
 
 load_dotenv()
 
@@ -57,6 +58,15 @@ with st.form("add_job_form", clear_on_submit=True):
             )
             db.add(job)
             db.commit()
+            db.refresh(job)  # نجيب الـ id والقيم المُحدّثة قبل ما نستخدمها في الفهرسة
+
+            # نفهرس الوظيفة فورًا في Chroma - قبل ما نقفل الـ session
+            # (لازم يحصل قبل db.close() عشان القيم expired من غير session نشط)
+            try:
+                index_single_job(job)
+            except Exception as e:
+                st.warning(f"الوظيفة اتضافت، لكن فشلت فهرستها للبحث الذكي: {e}")
+
             db.close()
             st.success(f"تمت إضافة وظيفة '{title}' بنجاح")
             st.rerun()

@@ -5,6 +5,7 @@ python-multipart
 httpx
 pydantic
 python-dotenv
+alembic
 groq
 pypdf
 python-docx
@@ -14,5 +15,4 @@ chromadb
 sentence-transformers
 black
 ruff
-alembic
 pytest
