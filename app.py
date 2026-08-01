@@ -227,8 +227,11 @@ def main():
                     with st.spinner("جاري تحليل السيرة الذاتية..."):
                         candidate_profile = run_async(analyze_cv(cv_text))
                 except Exception as e:
-                    st.error(f"تعذر قراءة أو تحليل الملف: {e}")
-                    st.stop()
+                    st.warning(
+                        "تعذّر قراءة أو تحليل السيرة الذاتية. سنكمل المقابلة بدون تحليل الـ CV. "
+                        f"إذا كنت تريد استخدام تحليل السيرة الذاتية، ثبت الحزم المطلوبة (pypdf و python-docx) أو ارفع ملف TXT. \nالسبب: {e}"
+                    )
+                    candidate_profile = None
 
             db = SessionLocal()
             db_session = InterviewSession(

@@ -8,14 +8,26 @@ import io
 
 
 def _extract_pdf(raw_bytes: bytes) -> str:
-    from pypdf import PdfReader
+    try:
+        from pypdf import PdfReader
+    except ImportError as exc:
+        raise ImportError(
+            "لا يمكن قراءة ملف PDF لأن مكتبة pypdf غير مثبتة. "
+            "ثبت pypdf أو ارفع ملف TXT بدلاً من PDF."
+        ) from exc
 
     reader = PdfReader(io.BytesIO(raw_bytes))
     return "\n".join(page.extract_text() or "" for page in reader.pages).strip()
 
 
 def _extract_docx(raw_bytes: bytes) -> str:
-    import docx
+    try:
+        import docx
+    except ImportError as exc:
+        raise ImportError(
+            "لا يمكن قراءة ملف DOCX لأن مكتبة python-docx غير مثبتة. "
+            "ثبت python-docx أو ارفع ملف TXT بدلاً من DOCX."
+        ) from exc
 
     doc = docx.Document(io.BytesIO(raw_bytes))
     return "\n".join(p.text for p in doc.paragraphs if p.text.strip()).strip()
