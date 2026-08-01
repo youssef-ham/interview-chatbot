@@ -213,7 +213,7 @@ def main():
             f"Topics: {', '.join(selected_job.required_topics)} | Level: {selected_job.difficulty}"
         )
 
-        cv_file = st.file_uploader("Upload resume (optional)", type=["pdf", "docx", "txt"])
+        cv_file = st.file_uploader("Upload resume (optional)", type=["txt"])
 
         # Persist uploaded file bytes in session_state so user can retry parsing after installing deps
         if cv_file is not None:
@@ -236,18 +236,9 @@ def main():
             col_a, col_b = st.columns([3, 1])
             with col_a:
                 if st.session_state.get("cv_parse_failed"):
-                    st.error(f"Previous CV parsing failed: {st.session_state.get('cv_parse_error')}")
+                    st.error(f"Previous resume parsing failed: {st.session_state.get('cv_parse_error')}")
                 else:
-                    st.info("Resume uploaded. You can start the interview or retry parsing after installing dependencies.")
-
-                with st.expander("Install resume parsing dependencies (one-time)"):
-                    st.write(
-                        "To enable PDF/DOCX resume parsing, install these packages in your environment:"
-                    )
-                    st.code("pip install pypdf python-docx", language="bash")
-                    st.caption(
-                        "On Streamlit Cloud: make sure requirements.txt (or pyproject) includes these packages and redeploy the app."
-                    )
+                    st.info("Resume uploaded. You can start the interview or retry parsing if the file was not read correctly.")
 
             with col_b:
                 if st.button("Retry parsing resume"):
@@ -275,7 +266,7 @@ def main():
                         "candidate_profile",
                     ]:
                         st.session_state.pop(k, None)
-                    st.success("Uploaded CV cleared.")
+                    st.success("Uploaded resume cleared.")
                     st.experimental_rerun()
 
         st.markdown(
@@ -304,7 +295,7 @@ def main():
                         st.session_state["cv_parse_error"] = str(e)
                         st.warning(
                             "Unable to read or analyze the resume. Continuing without CV analysis. "
-                            f"To enable resume analysis, install the required packages (pypdf and python-docx) or upload a TXT file.\nReason: {e}"
+                            f"Please upload a valid TXT resume.\nReason: {e}"
                         )
                         candidate_profile = None
                 elif cv_file is not None:
@@ -320,7 +311,7 @@ def main():
                         st.session_state["cv_parse_error"] = str(e)
                         st.warning(
                             "Unable to read or analyze the resume. Continuing without CV analysis. "
-                            f"To enable resume analysis, install the required packages (pypdf and python-docx) or upload a TXT file.\nReason: {e}"
+                            f"Please upload a valid TXT resume.\nReason: {e}"
                         )
                         candidate_profile = None
 

@@ -1,48 +1,25 @@
 """
-استخراج نص خام من ملف الـ CV (PDF أو DOCX أو TXT).
-فيه دالتين: واحدة لـ Streamlit (بتاخد كائن فيه .name و .read())،
-وواحدة للـ API (بتاخد اسم الملف والبايتس مباشرة) - الاتنين بيستخدموا نفس منطق الاستخراج.
+Extract raw text from uploaded resume files.
+The app currently supports only TXT resumes reliably. PDF and DOCX uploads are rejected unless
+supporting libraries are installed, but the deployable default flow uses TXT only.
 """
 
 import io
 
 
-def _extract_pdf(raw_bytes: bytes) -> str:
-    try:
-        from pypdf import PdfReader
-    except ImportError as exc:
-        raise ImportError(
-            "Cannot read PDF because the 'pypdf' library is not installed. "
-            "Install 'pypdf' or upload a TXT resume instead."
-        ) from exc
-
-    reader = PdfReader(io.BytesIO(raw_bytes))
-    return "\n".join(page.extract_text() or "" for page in reader.pages).strip()
-
-
-def _extract_docx(raw_bytes: bytes) -> str:
-    try:
-        import docx
-    except ImportError as exc:
-        raise ImportError(
-            "Cannot read DOCX because the 'python-docx' library is not installed. "
-            "Install 'python-docx' or upload a TXT resume instead."
-        ) from exc
-
-    doc = docx.Document(io.BytesIO(raw_bytes))
-    return "\n".join(p.text for p in doc.paragraphs if p.text.strip()).strip()
-
-
 def extract_text_from_bytes(filename: str, raw_bytes: bytes) -> str:
     filename = filename.lower()
-    if filename.endswith(".pdf"):
-        return _extract_pdf(raw_bytes)
-    elif filename.endswith(".docx"):
-        return _extract_docx(raw_bytes)
-    elif filename.endswith(".txt"):
+    if filename.endswith(".txt"):
         return raw_bytes.decode("utf-8", errors="ignore")
-    else:
-        raise ValueError(f"صيغة ملف غير مدعومة: {filename}")
+
+    raise ValueError(
+        "Unsupported resume format. Please upload a TXT resume file."
+    )
+
+
+def extract_text_from_file(uploaded_file) -> str:
+    """For Streamlit file uploader objects with .name and .read()."""
+    return extract_text_from_bytes(uploaded_file.name, uploaded_file.read())
 
 
 def extract_text_from_file(uploaded_file) -> str:

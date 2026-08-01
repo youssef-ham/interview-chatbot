@@ -1,44 +1,39 @@
 # interview-chatbot
 
-## نظرة عامة
+## Overview
 
-`interview-chatbot` هو مشروع بوت مقابلات ذكي مصمَّم لدعم تجربة تقييم المرشحين التقنية.
-المشروع يجمع بين:
-- واجهة مستخدم Streamlit تفاعلية.
-- API خلفي بواسطة FastAPI.
-- قاعدة بيانات SQL محليّة مع دعم ترحيلات Alembic.
-- محرك RAG محلي باستخدام Chroma و SentenceTransformers.
-- توليد أسئلة ذكي يعتمد على بنك الأسئلة والسياق الوظيفي وملف المرشح.
+`interview-chatbot` is an intelligent interview assistant built with Streamlit for the candidate-facing UI and FastAPI for backend services. The project combines:
 
-## الميزات الرئيسية
+- Interactive Streamlit interview experience.
+- FastAPI backend for question generation and scoring.
+- SQL database support with SQLAlchemy and Alembic.
+- Local RAG-like retrieval using Chroma and SentenceTransformers.
+- Candidate profile handling via resume upload and question personalization.
 
-- استرجاع الأسئلة باستخدام RAG محلي بدلًا من الاعتماد الكلي على الموديل.
-- دعم فهرسة بنك الأسئلة، وصف الوظيفة، وملف المرشح في Chroma.
-- بناء استعلام متقدم يشمل:
-  - موضوع السؤال.
-  - كلمات المرشح المفتاحية.
-  - سياق الوظيفة.
-  - بيانات المرشح الشخصية والتقنية.
-- فلترة Chroma صحيحة باستخدام `$and` في الاستعلامات متعددة الحقول.
-- إعادة ترتيب النتائج مع مزج تقييمات التشابه الأولية وإعادة الترتيب الأخباري.
-- دعم تحديثات قاعدة البيانات المحلية مع إدارة أعمدة مرنة في `db/database.py`.
+## Key Features
 
-## البنية
+- RAG-style question selection from a real question bank.
+- Job and resume context used to generate intelligent interview prompts.
+- Local retrieval with Chroma including topic and difficulty filtering.
+- Lightweight reranking fallback when heavy models are unavailable.
+- Database bootstrap logic with SQLite fallback for quick Streamlit Cloud deployment.
 
-- `app.py` - واجهة Streamlit للمقابلة.
-- `main.py` - واجهة FastAPI ونقاط النهاية للخدمة.
-- `retrieval.py` - منطق RAG، فهرسة Chroma، واسترجاع الأسئلة.
-- `ai_service.py` - نقطة الدخول لتوليد الأسئلة الذكية، ربط بنك الأسئلة، والتوليد الاحتياطي.
-- `db/` - إعداد SQLAlchemy، الجلسات، ونموذج البيانات.
-- `alembic/` - بنية ترحيل قاعدة البيانات.
-- `providers.py` - طبقة الاتصال بخدمات الموديل والبيانات الخارجية.
+## Repository Structure
 
-## المتطلبات
+- `app.py` - Streamlit app for the interview UI.
+- `main.py` - FastAPI backend entrypoint.
+- `retrieval.py` - RAG retrieval, question indexing, and similarity logic.
+- `ai_service.py` - Smart question generation and report logic.
+- `db/` - SQLAlchemy setup, session management, and models.
+- `alembic/` - Database migration configuration.
+- `scr/` - helper scripts for seeding and indexing data.
 
-- Python 3.12 أو أحدث.
-- مكتبات المشروع مذكورة في `requirements.txt` و `pyproject.toml`.
+## Requirements
 
-## التثبيت
+- Python 3.12 or newer.
+- Dependencies are listed in `requirements.txt` and `pyproject.toml`.
+
+## Installation
 
 ```bash
 python3 -m venv .venv
@@ -47,16 +42,17 @@ python -m pip install --upgrade pip
 python -m pip install -r requirements.txt
 ```
 
-لأدوات التطوير:
+> Note: Resume upload currently supports `TXT` files only. PDF and DOCX parsing are not enabled by default.
+
+For development dependencies:
 
 ```bash
 python -m pip install -e .[dev]
 ```
 
-## الإعداد
+## Configuration
 
-1. إنشاء ملف `.env` في جذر المشروع إذا لم يكن موجودًا.
-2. تكوين المتغيرات الأساسية:
+Create a `.env` file in the project root with the required settings:
 
 ```env
 DATABASE_URL=sqlite:///./interview_bot.db
@@ -65,91 +61,82 @@ EMBEDDING_MODEL_NAME=all-MiniLM-L6-v2
 CHROMA_COLLECTION_NAME=interview_documents
 ```
 
-> ملاحظة: إذا كانت قاعدة الأسئلة فارغة محليًا، افتح صفحة "إدارة الوظائف" في التطبيق واضغط "أضف الأسئلة من بنك البيانات" لتعبئة الأسئلة تلقائيًا من `data/questions.json`.
+If the question bank is empty, open the Streamlit Manage Jobs page and use the provided button to seed the database from `data/questions.json`.
 
-3. إنشاء قاعدة البيانات وتحديثها:
+To initialize the database schema:
 
 ```bash
 alembic upgrade head
 ```
 
-4. تهيئة البيانات والفهرسة:
+To seed and index data:
 
 ```bash
 python scr/seed_questions.py
 python scr/index_documents.py
 ```
 
-> ملاحظة: إذا كان لديك بيانات أسئلة أو وظائف جديدة، يمكنك استخدام `retrieval.index_single_question(...)` أو `retrieval.index_single_job(...)` لإضافة العناصر فورًا إلى فهرس Chroma.
+## Running the App
 
-## التشغيل
-
-### واجهة المستخدم Streamlit
+### Streamlit UI
 
 ```bash
 streamlit run app.py
 ```
 
-### تشغيل API الخلفي
+### Backend API
 
 ```bash
 uvicorn main:app --reload
 ```
 
-### إدارة الوظائف
+### Manage Jobs
 
-إذا كنت تستخدم صفحة Streamlit الإدارية، افتح:
+Open the Streamlit app and navigate to the `Manage Jobs` page if available.
 
-```bash
-streamlit run app.py
-```
+## How RAG Works
 
-وثم انتقل إلى الصفحة `Manage Jobs` إن كانت متاحة في قائمة Streamlit.
+1. The system reads job postings, question bank entries, and candidate context.
+2. It builds a query containing:
+   - topic
+   - job context
+   - candidate keywords
+   - candidate profile
+3. It queries Chroma and filters by `topic` and `difficulty`.
+4. If strict filtering returns no results, it falls back to broader topic matching.
+5. It reranks results and combines retrieval and reranking scores.
 
-## كيفية عمل الـ RAG
+## Development
 
-1. يقرأ النظام بنك الأسئلة والوظائف وملفات المرشحين.
-2. يبني نص استعلام يحتوي على:
-   - الموضوع.
-   - سياق الوظيفة (إن وجد).
-   - كلمات المرشح المفتاحية.
-   - ملف المرشح الشخصي.
-3. يستعلم Chroma باستخدام هذا النص ويطبِّق فلترًا للمطابقة على `topic` و `difficulty`.
-4. إذا لم يجد نتائج مطابقة صارمة، يتراجع إلى فلتر أوسع بالموضوع فقط.
-5. يعيد الترتيب باستخدام دالة `rerank_documents` ويجمع درجات التشابه الأولى مع درجات إعادة الترتيب.
-
-## تطوير
-
-- تنسيق الكود:
+- Format code:
 
 ```bash
 black .
 ```
 
-- فحص الشيفرة:
+- Lint code:
 
 ```bash
 ruff check .
 ```
 
-- تشغيل الاختبارات:
+- Run tests:
 
 ```bash
 pytest
 ```
 
-- إنشاء ترحيل جديد:
+- Create a new migration:
 
 ```bash
-alembic revision --autogenerate -m "وصف التغيير"
+alembic revision --autogenerate -m "Add description"
 ```
 
-## الاستضافة على Streamlit Cloud
+## Streamlit Cloud Deployment
 
-للتشغيل على Streamlit Cloud بسرعة باستخدام SQLite المحلي، أضف القيم التالية في Secrets:
+For fast Streamlit Cloud deployment with local SQLite, add these secrets:
 
 ```toml
-GROQ_API_KEY = "your_groq_api_key"
 DATABASE_URL = "sqlite:///./interview_bot.db"
 CHROMA_PERSIST_DIR = "./chroma_store"
 EMBEDDING_MODEL_NAME = "all-MiniLM-L6-v2"
@@ -161,20 +148,20 @@ CONSECUTIVE_FAIL = 2
 MAX_QUESTIONS = 8
 ```
 
-إذا كنت تستخدم PostgreSQL محليًا للتطوير، احتفظ بإعداد `DATABASE_URL` في ملف `.env` المحلي أو في بيئتك المحلية كما هو. الكود الآن يدعم التشغيل المحلي بـ PostgreSQL وفي Cloud بـ SQLite كخيار سريع.
+If you are using PostgreSQL locally for development, keep `DATABASE_URL` in your local `.env` file. The app supports PostgreSQL for development and SQLite as a fallback for Cloud deployment.
 
-الملف `streamlit_cloud.env.example` يوضح نفس الإعدادات بصيغة جاهزة للنسخ.
+The file `streamlit_cloud.env.example` contains the same configuration in an example format.
 
-## ملاحظات مهمة
+## Notes
 
-- `db/database.py` يحتوي على منطق `init_db()` الذي ينشئ الجداول ويضيف الأعمدة المفقودة تلقائيًا عند التشغيل.
-- `CHROMA_PERSIST_DIR` يمكن تغييره لتخزين الفهرس في مسار مختلف.
-- يفضَّل استخدام `DATABASE_URL` بـ SQLite محليًا و PostgreSQL في بيئات الإنتاج.
-- إذا واجهت خطأ في الاستيراد أو الحزم، تأكد من أن البيئة الافتراضية مفعلة وأن الحزم مثبتة.
+- `db/database.py` includes `init_db()` logic that creates missing tables and adapts the schema on startup.
+- `CHROMA_PERSIST_DIR` controls where the local Chroma store is persisted.
+- Use SQLite locally for quick setup and PostgreSQL for production-grade deployments.
+- If you encounter import or package errors, confirm your virtual environment is activated and dependencies are installed.
 
-## نقاط التحسين القادمة
+## Future Improvements
 
-- زيادة قوة الأسئلة باستخدام مجموعات بيانات أكبر لبنك الأسئلة.
-- إضافة دعم Markdown أو واجهات متعددة اللغات.
-- تعزيز تكامل الـ RAG مع تحليل السيرة الذاتية الذكي وملفات `.pdf`.
-- بناء واجهة إدارة بيانات أسئلة / وظائف أكثر شمولا.
+- Expand the question bank with more realistic interview content.
+- Add structured admin tooling for job/question management.
+- Improve multi-language UI support.
+- Add optional PDF resume support once dependency constraints are resolved.
