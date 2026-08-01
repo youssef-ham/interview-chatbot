@@ -1,6 +1,5 @@
 """
-هنا الدوال اللي بتستخدم الموديل عشان تعمل مهام محددة:
-توليد سؤال، تقييم إجابة، عمل تقرير.
+AI helper functions for question generation, answer evaluation, and report creation.
 """
 
 import json
@@ -23,24 +22,23 @@ def clean_json(raw_text: str) -> dict:
         raise
 
 
-QUESTION_SYSTEM_PROMPT = """أنت interviewer تقني محترف.
-مهمتك: توليد سؤال مقابلة واحد فقط.
+QUESTION_SYSTEM_PROMPT = """You are a senior technical interviewer.
+Your task: generate exactly one interview question.
 
-قواعد صارمة:
-- رجّع JSON فقط، بدون أي نص أو شرح خارج الـ JSON.
-- أجب بالعربية فقط، ولا تخلط بين العربية والإنجليزية.
-- الشكل المطلوب بالظبط:
-{"question": "نص السؤال", "expected_points": [{"point": "نقطة 1", "weight": 0.5}, {"point": "نقطة 2", "weight": 0.3}, {"point": "نقطة 3", "weight": 0.2}]}
-- 3 نقاط تقنية واضحة، والأوزان لازم يجمعوا 1.0 بالظبط.
-- الوزن الأعلى للنقطة الأهم تقنيًا."""
+Strict rules:
+- Return JSON only, with no extra text outside the JSON.
+- Answer in English only.
+- The exact required format is:
+{"question": "question text", "expected_points": [{"point": "point 1", "weight": 0.5}, {"point": "point 2", "weight": 0.3}, {"point": "point 3", "weight": 0.2}]}
+- Provide 3 clear technical expected points, and weights must sum to exactly 1.0.
+- Place the highest weight on the most important technical point."""
 
 
 async def generate_question(topic: str, difficulty: str, exclude_ids: list = None) -> dict:
     """
-    بتحاول أولًا تجيب سؤال حقيقي من بنك الأسئلة باستخدام استرجاع RAG.
-    لو مفيش سؤال مناسب، بترجع لتوليد سؤال بالموديل كخطة بديلة.
-    لو السؤال جاي من البنك، بنستخدم نفس آلية إعادة الصياغة بالعربية فقط
-    حتى لو كان نص السؤال الأصلي بالإنجليزية.
+    First attempt to fetch a real question from the question bank using RAG.
+    If no suitable bank question exists, fall back to model generation.
+    If the question is from the bank, use question rewriting to personalize it.
     """
     matches = find_best_matching_question(topic, difficulty, [], exclude_ids)
     if matches:
@@ -58,40 +56,40 @@ async def generate_question(topic: str, difficulty: str, exclude_ids: list = Non
             pass
         return selected
 
-    # خطة بديلة: مفيش أسئلة متاحة في البنك، نولّد واحد بالموديل
-    user_prompt = f"الموضوع: {topic}\nالمستوى: {difficulty}\nولّد سؤال واحد الآن."
+    # Fallback path: no matching questions in the bank, generate one with the model
+    user_prompt = f"Topic: {topic}\nDifficulty: {difficulty}\nGenerate one interview question now."
     raw_response = await generate(QUESTION_SYSTEM_PROMPT, user_prompt)
     question_data = clean_json(raw_response)
-    question_data["id"] = None  # مفيش id لأنه مش من البنك
+    question_data["id"] = None  # No id because it is not from the bank
     return question_data
 
 
-EVAL_SYSTEM_PROMPT = """أنت مقيّم تقني دقيق وموضوعي.
-قيّم إجابة المرشح بناءً على النقاط المتوقعة فقط.
+EVAL_SYSTEM_PROMPT = """You are a precise and objective technical evaluator.
+Evaluate the candidate's answer only against the expected points.
 
-قواعد صارمة:
-- رجّع JSON فقط بدون أي نص خارجه.
-- أجب بالعربية فقط.
-- الشكل المطلوب بالظبط:
-{"score": رقم من 0 إلى 10, "missing_points": ["النقاط الناقصة"], "feedback": "تعليق قصير بالعربي"}
-- لو الإجابة فاضية، الدرجة = 0."""
+Strict rules:
+- Return JSON only, with no extra text outside the JSON.
+- Answer in English only.
+- The exact required format is:
+{"score": number from 0 to 10, "missing_points": ["missing points"], "feedback": "short feedback in English"}
+- If the answer is empty, score = 0."""
 
 EVAL_PROMPT = (
-    "السؤال: {question}\n\n"
-    "النقاط المتوقعة (وزّع الدرجة حسب وزن كل نقطة):\n{expected_points}\n\n"
-    "إجابة المرشح: {user_answer}\nقيّم الإجابة الآن."
+    "Question: {question}\n\n"
+    "Expected points (distribute score by weight):\n{expected_points}\n\n"
+    "Candidate answer: {user_answer}\nEvaluate the answer now."
 )
 
 
 def _format_expected_points(expected_points: list) -> str:
-    """بتحول قائمة النقاط لنص واضح يوضح وزن كل نقطة، عشان الموديل يوزّع الدرجة صح"""
+    """Convert expected points into a clear text block that includes weight information."""
     lines = []
     for p in expected_points:
         if isinstance(p, dict):
             weight_pct = round(p["weight"] * 100)
-            lines.append(f"- {p['point']} (الوزن: {weight_pct}%)")
+            lines.append(f"- {p['point']} (weight: {weight_pct}%)")
         else:
-            lines.append(f"- {p}")  # دعم النسخة القديمة (نص بس، من غير وزن)
+            lines.append(f"- {p}")  # support legacy plain point text
     return "\n".join(lines)
 
 
@@ -107,21 +105,21 @@ async def evaluate_answer(question: str, expected_points: list, user_answer: str
     return clean_json(raw_response)
 
 
-REPORT_SYSTEM_PROMPT = """أنت مسؤول توظيف تقني خبير.
-بناءً على نتائج مقابلة كاملة، اكتب تقرير تقييم شامل.
+REPORT_SYSTEM_PROMPT = """You are an expert technical hiring manager.
+Based on a full interview summary, write a complete evaluation report.
 
-قواعد صارمة:
-- رجّع JSON فقط بدون أي نص خارجه.
-- أجب بالعربية فقط.
-- الشكل المطلوب بالظبط:
-{"overall_score": رقم من 0 إلى 10, "strengths": ["نقاط قوة"], "weaknesses": ["نقاط ضعف"], "recommendation": "hire او maybe او no_hire", "summary": "ملخص قصير بالعربي"}"""
+Strict rules:
+- Return JSON only, with no extra text outside the JSON.
+- Answer in English only.
+- The exact required format is:
+{"overall_score": number from 0 to 10, "strengths": ["strength points"], "weaknesses": ["weakness points"], "recommendation": "hire or maybe or no_hire", "summary": "short summary in English"}"""
 
-REPORT_PROMPT = "{summary_text}\n\n" "اكتب تقرير تقييم كامل استنادًا لهذا الملخص."
+REPORT_PROMPT = "{summary_text}\n\n" "Write a complete evaluation report based on this summary."
 
 
 async def generate_report(answered_questions: list) -> dict:
     summary_text = "\n\n".join(
-        f"سؤال: {q['question']}\nدرجة: {q['score']}/10\nنقاط ناقصة: {q['missing_points']}"
+        f"Question: {q['question']}\nScore: {q['score']}/10\nMissing points: {q['missing_points']}"
         for q in answered_questions
     )
     user_prompt = REPORT_PROMPT.format(summary_text=summary_text)
@@ -131,7 +129,7 @@ async def generate_report(answered_questions: list) -> dict:
 
 
 # ---------------------------------------------------------------------------
-# جديد: نسخة مخصصة من generate_question بتستخدم بروفايل المرشح
+# New: personalized version of generate_question that uses the candidate profile
 # ---------------------------------------------------------------------------
 async def generate_personalized_question(
     topic: str,
@@ -142,9 +140,9 @@ async def generate_personalized_question(
     session_id: int | str | None = None,
 ) -> dict:
     """
-    لو عندنا بروفايل مرشح (من cv_analyzer)، بنستخدم retrieval.py نجيب أقرب سؤال
-    لمهاراته، وبعدين question_rewriter.py يعيد صياغته ليبدو موجّه له شخصيًا.
-    لو مفيش سؤال مناسب في البنك، بترجع لـ generate_question العادية.
+    If we have a candidate profile (from cv_analyzer), use retrieval.py to find the closest question
+    for their skills, then use question_rewriter.py to personalize it.
+    If there is no suitable bank question, fall back to the standard generate_question path.
     """
     from question_rewriter import rewrite_question
     from retrieval import find_best_matching_question
@@ -178,7 +176,7 @@ async def generate_personalized_question(
     )
 
     if not matches:
-        # مفيش أسئلة متاحة أصلاً في البنك لنفس الموضوع/المستوى - نرجع للخطة العادية
+        # No matching bank questions for this topic/level; fall back to the regular generation strategy.
         return await generate_question(topic, difficulty, exclude_ids)
 
     best_match = matches[0]

@@ -526,9 +526,9 @@ def main():
         progress_context = get_progress_context()
         st.progress(progress_context["percentage"] / 100)
         col1, col2, col3 = st.columns(3)
-        col1.metric("التقدم", f"{progress_context['current']}/{progress_context['total']}")
+        col1.metric("Progress", f"{progress_context['current']}/{progress_context['total']}")
         col2.metric(
-            "متوسط الدرجات",
+            "Average Score",
             (
                 f"{progress_context['avg_score']:.1f}/10"
                 if progress_context["avg_score"] is not None
@@ -536,7 +536,7 @@ def main():
             ),
         )
         col3.metric(
-            "آخر درجة",
+            "Last Score",
             (
                 f"{progress_context['last_score']:.1f}/10"
                 if progress_context["last_score"] is not None
