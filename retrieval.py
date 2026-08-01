@@ -5,10 +5,13 @@
 
 import csv
 import datetime
+import logging
 from pathlib import Path
 from typing import TYPE_CHECKING, Any
 
 from config import get_setting
+
+logger = logging.getLogger("interview_bot.retrieval")
 from db.database import SessionLocal
 from db.models import Job, Question
 from reranker import rerank_documents
@@ -460,6 +463,10 @@ def find_best_matching_question(
     try:
         collection = get_collection()
     except Exception:
+        logger.exception(
+            "Failed to get Chroma collection - falling back to plain DB questions "
+            "(no semantic matching, no personalization based on retrieval)"
+        )
         return _fallback_questions_from_db(topic, difficulty, exclude_ids, k)
 
     try:
@@ -500,6 +507,10 @@ def find_best_matching_question(
 
         filtered = []
     except Exception:
+        logger.exception(
+            "Chroma query failed - falling back to plain DB questions "
+            "(no semantic matching, no personalization based on retrieval)"
+        )
         return _fallback_questions_from_db(topic, difficulty, exclude_ids, k)
     for question_id, metadata, score, document in zip(ids, metadatas, distances, documents):
         cleaned_id = question_id.replace("question_", "")

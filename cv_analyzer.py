@@ -11,6 +11,9 @@ Your task: analyze the resume text and extract structured candidate profile info
 
 Strict rules:
 - Return JSON only, with no extra text outside the JSON.
+- Answer in English only, even if the resume itself is written in another language
+  (e.g. Arabic). Translate skill names, project descriptions, and all extracted
+  text into English before returning them.
 - The exact required format is:
 {
   "skills": ["skill 1", "skill 2"],
