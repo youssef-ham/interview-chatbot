@@ -16,16 +16,31 @@ st.set_page_config(page_title="إدارة الوظائف", page_icon="🗂️")
 Base.metadata.create_all(bind=engine)
 
 
+DEFAULT_TOPICS = [
+    "Python",
+    "Data Structures",
+    "Algorithms",
+    "System Design",
+    "DevOps",
+    "SQL",
+    "Security",
+    "Frontend",
+    "Backend",
+    "Testing",
+]
+DEFAULT_DIFFICULTIES = ["junior", "mid", "senior", "lead", "intern"]
+
+
 def get_available_topics():
     db = SessionLocal()
-    topics = [row[0] for row in db.query(Question.topic).distinct().all()]
+    topics = [row[0] for row in db.query(Question.topic).distinct().all() if row[0]]
     db.close()
     return topics
 
 
 def get_available_difficulties():
     db = SessionLocal()
-    difficulties = [row[0] for row in db.query(Question.difficulty).distinct().all()]
+    difficulties = [row[0] for row in db.query(Question.difficulty).distinct().all() if row[0]]
     db.close()
     return difficulties
 
@@ -39,8 +54,32 @@ with st.form("add_job_form", clear_on_submit=True):
     description = st.text_area(
         "وصف الوظيفة", height=150, placeholder="اكتب متطلبات ومسؤوليات الوظيفة..."
     )
-    required_topics = st.multiselect("المواضيع المطلوبة في المقابلة", get_available_topics())
-    difficulty = st.selectbox("المستوى المطلوب", get_available_difficulties())
+
+    available_topics = get_available_topics()
+    available_difficulties = get_available_difficulties()
+
+    if not available_topics or not available_difficulties:
+        st.info(
+            "مافيش بيانات أسئلة في قاعدة البيانات حالياً، فبيظهر لك الخيارات الافتراضية. "
+            "لو عايز البحث الذكي يشتغل أحسن، أضف أسئلة أولاً أو حدّث بنك الأسئلة."
+        )
+
+    required_topics = st.multiselect(
+        "المواضيع المطلوبة في المقابلة",
+        available_topics or DEFAULT_TOPICS,
+        help=(
+            "اختر أهم المواضيع اللي يتوقع أنها تظهر في المقابلة. "
+            "مثلاً Python، Data Structures، أو System Design."
+        ),
+    )
+    difficulty = st.selectbox(
+        "المستوى المطلوب",
+        available_difficulties or DEFAULT_DIFFICULTIES,
+        help=(
+            "اختر مستوى الوظيفة. junior للمبتدئين، mid للمتوسطين، senior للخبرة العالية. "
+            "استخدم intern للمتدرّبين و lead للمسؤوليات القيادية."
+        ),
+    )
 
     submitted = st.form_submit_button("أضف الوظيفة", type="primary")
 
