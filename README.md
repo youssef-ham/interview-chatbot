@@ -65,6 +65,8 @@ EMBEDDING_MODEL_NAME=all-MiniLM-L6-v2
 CHROMA_COLLECTION_NAME=interview_documents
 ```
 
+> ملاحظة: إذا كانت قاعدة الأسئلة فارغة محليًا، افتح صفحة "إدارة الوظائف" في التطبيق واضغط "أضف الأسئلة من بنك البيانات" لتعبئة الأسئلة تلقائيًا من `data/questions.json`.
+
 3. إنشاء قاعدة البيانات وتحديثها:
 
 ```bash

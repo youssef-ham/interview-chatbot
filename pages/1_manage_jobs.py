@@ -2,18 +2,24 @@
 صفحة إدارة الوظائف - صاحب الشركة بيضيف وظايف جديدة من هنا.
 """
 
+import json
+from pathlib import Path
+
 import streamlit as st
 from dotenv import load_dotenv
 
 from db.database import Base, SessionLocal, engine
 from db.models import Job, Question
-from retrieval import index_single_job
+from retrieval import index_single_job, index_single_question
 
 load_dotenv()
 
 st.set_page_config(page_title="إدارة الوظائف", page_icon="🗂️")
 
 Base.metadata.create_all(bind=engine)
+
+DATA_DIR = Path(__file__).resolve().parents[1] / "data"
+QUESTIONS_JSON = DATA_DIR / "questions.json"
 
 
 DEFAULT_TOPICS = [
@@ -45,7 +51,74 @@ def get_available_difficulties():
     return difficulties
 
 
+def count_questions() -> int:
+    db = SessionLocal()
+    count = db.query(Question).count()
+    db.close()
+    return count
+
+
+def seed_questions_from_data() -> tuple[int, int]:
+    if not QUESTIONS_JSON.exists():
+        return 0, 0
+
+    with QUESTIONS_JSON.open("r", encoding="utf-8") as f:
+        questions = json.load(f)
+
+    db = SessionLocal()
+    added = 0
+    skipped = 0
+    newly_added_questions = []
+
+    for q in questions:
+        exists = db.query(Question).filter_by(id=q["id"]).first()
+        if exists:
+            skipped += 1
+            continue
+
+        question = Question(
+            id=q["id"],
+            topic=q["topic"],
+            subtopic=q.get("subtopic"),
+            difficulty=q["difficulty"],
+            question_type=q.get("question_type"),
+            question=q["question"],
+            expected_points=q["expected_points"],
+            sample_answer=q.get("sample_answer"),
+            tags=q.get("tags"),
+            source=q.get("source"),
+        )
+        db.add(question)
+        newly_added_questions.append(question)
+        added += 1
+
+    if added:
+        db.commit()
+    db.close()
+
+    for question in newly_added_questions:
+        try:
+            index_single_question(question)
+        except Exception:
+            pass
+
+    return added, skipped
+
+
 st.title("🗂️ إدارة الوظائف")
+
+question_count = count_questions()
+if question_count == 0:
+    st.warning(
+        "قاعدة الأسئلة حالياً فاضية. اضغط الزر تحت لملء بنك الأسئلة الآلي من data/questions.json."
+    )
+    if st.button("أضف الأسئلة من بنك البيانات"):
+        added, skipped = seed_questions_from_data()
+        if added:
+            st.success(f"تمت إضافة {added} سؤالاً جديداً إلى قاعدة البيانات.")
+        else:
+            st.info("مافيش أسئلة جديدة لإضافتها أو الملف غير موجود.")
+        st.experimental_rerun()
 
 st.subheader("إضافة وظيفة جديدة")
 
