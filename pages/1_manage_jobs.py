@@ -118,7 +118,7 @@ if question_count == 0:
             st.success(f"Added {added} new questions to the database.")
         else:
             st.info("No new questions to add or the file is missing.")
-        st.experimental_rerun()
+        st.rerun()
 
 st.subheader("Add New Job")
 

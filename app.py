@@ -263,7 +263,7 @@ def main():
                     ]:
                         st.session_state.pop(k, None)
                     st.success("Uploaded resume cleared.")
-                    st.experimental_rerun()
+                    st.rerun()
 
         st.markdown(
             "**The number of questions will be determined automatically based on answer evaluation; you do not need to choose it.**"
