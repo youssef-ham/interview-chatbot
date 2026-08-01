@@ -231,24 +231,52 @@ def main():
                 # Non-fatal: keep trying later
                 pass
 
-        # If there was a previous parse failure, show retry option
-        if st.session_state.get("cv_bytes") and st.session_state.get("cv_parse_failed"):
-            st.error(f"Previous CV parsing failed: {st.session_state.get('cv_parse_error')}")
-            if st.button("Retry parsing resume"):
-                try:
-                    cv_text = extract_text_from_bytes(
-                        st.session_state.get("cv_filename", "resume.txt"),
-                        st.session_state.get("cv_bytes", b""),
+        # Show controls and guidance when a file is present
+        if st.session_state.get("cv_bytes"):
+            col_a, col_b = st.columns([3, 1])
+            with col_a:
+                if st.session_state.get("cv_parse_failed"):
+                    st.error(f"Previous CV parsing failed: {st.session_state.get('cv_parse_error')}")
+                else:
+                    st.info("Resume uploaded. You can start the interview or retry parsing after installing dependencies.")
+
+                with st.expander("Install resume parsing dependencies (one-time)"):
+                    st.write(
+                        "To enable PDF/DOCX resume parsing, install these packages in your environment:"
                     )
-                    with st.spinner("Analyzing resume..."):
-                        parsed = run_async(analyze_cv(cv_text))
-                    st.session_state["candidate_profile"] = parsed
-                    st.session_state.pop("cv_parse_failed", None)
-                    st.success("Resume parsed successfully. Will be used for personalized questions.")
-                except Exception as e:
-                    st.session_state["cv_parse_failed"] = True
-                    st.session_state["cv_parse_error"] = str(e)
-                    st.error(f"Retry failed: {e}")
+                    st.code("pip install pypdf python-docx", language="bash")
+                    st.caption(
+                        "On Streamlit Cloud: make sure requirements.txt (or pyproject) includes these packages and redeploy the app."
+                    )
+
+            with col_b:
+                if st.button("Retry parsing resume"):
+                    try:
+                        cv_text = extract_text_from_bytes(
+                            st.session_state.get("cv_filename", "resume.txt"),
+                            st.session_state.get("cv_bytes", b""),
+                        )
+                        with st.spinner("Analyzing resume..."):
+                            parsed = run_async(analyze_cv(cv_text))
+                        st.session_state["candidate_profile"] = parsed
+                        st.session_state.pop("cv_parse_failed", None)
+                        st.success("Resume parsed successfully. Will be used for personalized questions.")
+                    except Exception as e:
+                        st.session_state["cv_parse_failed"] = True
+                        st.session_state["cv_parse_error"] = str(e)
+                        st.error(f"Retry failed: {e}")
+
+                if st.button("Clear uploaded CV"):
+                    for k in [
+                        "cv_bytes",
+                        "cv_filename",
+                        "cv_parse_failed",
+                        "cv_parse_error",
+                        "candidate_profile",
+                    ]:
+                        st.session_state.pop(k, None)
+                    st.success("Uploaded CV cleared.")
+                    st.experimental_rerun()
 
         st.markdown(
             "**The number of questions will be determined automatically based on answer evaluation; you do not need to choose it.**"
