@@ -194,6 +194,50 @@ def build_question_text(question: Question) -> str:
     return text
 
 
+def _fallback_questions_from_db(
+    topic: str,
+    difficulty: str,
+    exclude_ids: list | None = None,
+    k: int = 5,
+) -> list[dict[str, Any]]:
+    exclude_ids = {str(item) for item in (exclude_ids or [])}
+    db = SessionLocal()
+    try:
+        query = db.query(Question)
+        if difficulty:
+            query = query.filter(Question.difficulty == difficulty)
+        if topic:
+            query = query.filter(Question.topic == topic)
+        candidates = query.order_by(Question.id.asc()).all()
+        if not candidates and topic:
+            candidates = (
+                db.query(Question).filter(Question.topic == topic).order_by(Question.id.asc()).all()
+            )
+        if not candidates:
+            candidates = db.query(Question).order_by(Question.id.asc()).all()
+
+        filtered = [question for question in candidates if str(question.id) not in exclude_ids]
+        selected = filtered[:k]
+        if not selected and filtered:
+            selected = filtered[:1]
+
+        matches = []
+        for question in selected:
+            matches.append(
+                {
+                    "id": question.id,
+                    "question": question.question,
+                    "expected_points": question.expected_points,
+                    "topic": question.topic,
+                    "difficulty": question.difficulty,
+                    "match_score": 1.0,
+                }
+            )
+        return matches
+    finally:
+        db.close()
+
+
 def index_question_bank():
     db = SessionLocal()
     questions = db.query(Question).all()
@@ -202,8 +246,12 @@ def index_question_bank():
     if not questions:
         return
 
-    client = get_chroma_client()
-    collection = get_collection()
+    try:
+        client = get_chroma_client()
+        collection = get_collection()
+    except Exception:
+        return
+
     texts = []
     metadatas = []
     ids = []
@@ -243,8 +291,12 @@ def index_job_descriptions():
     if not jobs:
         return
 
-    client = get_chroma_client()
-    collection = get_collection()
+    try:
+        client = get_chroma_client()
+        collection = get_collection()
+    except Exception:
+        return
+
     ids = []
     texts = []
     metadatas = []
@@ -280,8 +332,11 @@ def index_single_question(question) -> None:
     فهرسة سؤال واحد بس - بتتنادى فورًا لحظة إضافة السؤال (من seed_questions.py مثلًا)
     بدل ما نستنى تشغيل index_documents.py يدوي على كل البنك.
     """
-    client = get_chroma_client()
-    collection = get_collection()
+    try:
+        client = get_chroma_client()
+        collection = get_collection()
+    except Exception:
+        return
 
     text = build_question_text(question)
     embedding = embed_texts([text])[0]
@@ -308,8 +363,11 @@ def index_single_question(question) -> None:
 
 def index_single_job(job) -> None:
     """فهرسة وظيفة واحدة بس - بتتنادى فورًا لحظة إضافة الوظيفة من الـ API أو صفحة الإدارة"""
-    client = get_chroma_client()
-    collection = get_collection()
+    try:
+        client = get_chroma_client()
+        collection = get_collection()
+    except Exception:
+        return
 
     text = build_job_text(job)
     embedding = embed_texts([text])[0]
@@ -338,8 +396,12 @@ def index_candidate_profile(session_id: int | str, candidate_profile: dict):
     if not candidate_profile:
         return
 
-    client = get_chroma_client()
-    collection = get_collection()
+    try:
+        client = get_chroma_client()
+        collection = get_collection()
+    except Exception:
+        return
+
     doc_id = f"cv_{session_id}"
     text = build_profile_text(candidate_profile)
     embedding = embed_texts([text])[0]
@@ -380,44 +442,52 @@ def find_best_matching_question(
     يعيد قائمة من النتائج مع التشابه والبيانات الأصلية من قاعدة الأسئلة.
     """
     exclude_ids = exclude_ids or []
-    collection = get_collection()
     query_text = build_query_text(topic, candidate_profile, candidate_keywords, job_context)
 
-    def _query_with_filter(filter_metadata: dict[str, Any]) -> dict[str, Any]:
-        query_embedding = embed_texts([query_text])[0]
-        return collection.query(
-            query_embeddings=[query_embedding],
-            n_results=RERANKER_TOP_N + len(exclude_ids),
-            where=filter_metadata,
-            include=["documents", "metadatas", "distances"],
-        )
+    try:
+        collection = get_collection()
+    except Exception:
+        return _fallback_questions_from_db(topic, difficulty, exclude_ids, k)
 
-    filter_metadata = {
-        "$and": [
-            {"source": "question"},
-            {"topic": topic},
-            {"difficulty": difficulty},
-        ]
-    }
+    try:
 
-    results = _query_with_filter(filter_metadata)
+        def _query_with_filter(filter_metadata: dict[str, Any]) -> dict[str, Any]:
+            query_embedding = embed_texts([query_text])[0]
+            return collection.query(
+                query_embeddings=[query_embedding],
+                n_results=RERANKER_TOP_N + len(exclude_ids),
+                where=filter_metadata,
+                include=["documents", "metadatas", "distances"],
+            )
 
-    ids = results.get("ids", [[]])[0]
-    if not ids:
-        fallback_filter = {
+        filter_metadata = {
             "$and": [
                 {"source": "question"},
                 {"topic": topic},
+                {"difficulty": difficulty},
             ]
         }
-        results = _query_with_filter(fallback_filter)
 
-    ids = results.get("ids", [[]])[0]
-    metadatas = results.get("metadatas", [[]])[0]
-    distances = results.get("distances", [[]])[0]
-    documents = results.get("documents", [[]])[0]
+        results = _query_with_filter(filter_metadata)
 
-    filtered = []
+        ids = results.get("ids", [[]])[0]
+        if not ids:
+            fallback_filter = {
+                "$and": [
+                    {"source": "question"},
+                    {"topic": topic},
+                ]
+            }
+            results = _query_with_filter(fallback_filter)
+
+        ids = results.get("ids", [[]])[0]
+        metadatas = results.get("metadatas", [[]])[0]
+        distances = results.get("distances", [[]])[0]
+        documents = results.get("documents", [[]])[0]
+
+        filtered = []
+    except Exception:
+        return _fallback_questions_from_db(topic, difficulty, exclude_ids, k)
     for question_id, metadata, score, document in zip(ids, metadatas, distances, documents):
         cleaned_id = question_id.replace("question_", "")
         if cleaned_id in exclude_ids:
