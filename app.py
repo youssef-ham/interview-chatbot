@@ -213,22 +213,18 @@ def main():
             f"Topics: {', '.join(selected_job.required_topics)} | Level: {selected_job.difficulty}"
         )
 
-        cv_file = st.file_uploader("Upload resume (optional)", type=["txt"])
+        cv_file = st.file_uploader("Upload resume (optional)", type=["pdf", "docx", "txt"])
 
-        # Persist uploaded file bytes in session_state so user can retry parsing after installing deps
+        # Persist uploaded file bytes in session_state so user can retry parsing.
         if cv_file is not None:
             try:
-                # read once and store
                 buf = cv_file.read()
                 st.session_state["cv_bytes"] = buf
                 st.session_state["cv_filename"] = cv_file.name
-                # Clear previous parse flags when a new file is uploaded
                 st.session_state.pop("cv_parse_failed", None)
                 st.session_state.pop("cv_parse_error", None)
-                # Also clear any previously stored candidate_profile to be conservative
                 st.session_state.pop("candidate_profile", None)
             except Exception:
-                # Non-fatal: keep trying later
                 pass
 
         # Show controls and guidance when a file is present
@@ -295,7 +291,7 @@ def main():
                         st.session_state["cv_parse_error"] = str(e)
                         st.warning(
                             "Unable to read or analyze the resume. Continuing without CV analysis. "
-                            f"Please upload a valid TXT resume.\nReason: {e}"
+                            f"Please upload a valid TXT, PDF, or DOCX resume.\nReason: {e}"
                         )
                         candidate_profile = None
                 elif cv_file is not None:
@@ -311,10 +307,9 @@ def main():
                         st.session_state["cv_parse_error"] = str(e)
                         st.warning(
                             "Unable to read or analyze the resume. Continuing without CV analysis. "
-                            f"Please upload a valid TXT resume.\nReason: {e}"
+                            f"Please upload a valid TXT, PDF, or DOCX resume.\nReason: {e}"
                         )
                         candidate_profile = None
-
             db = SessionLocal()
             db_session = InterviewSession(
                 job_id=selected_job.id,  # كان ناقص - بدونه معندناش رابط بين الجلسة والوظيفة

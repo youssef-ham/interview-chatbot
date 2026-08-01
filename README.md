@@ -42,7 +42,7 @@ python -m pip install --upgrade pip
 python -m pip install -r requirements.txt
 ```
 
-> Note: Resume upload currently supports `TXT` files only. PDF and DOCX parsing are not enabled by default.
+> Note: Resume upload supports `TXT`, `PDF`, and `DOCX` resumes. Required parser libraries are installed by default via `requirements.txt`.
 
 For development dependencies:
 
