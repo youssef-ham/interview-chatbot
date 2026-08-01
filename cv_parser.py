@@ -32,25 +32,51 @@ def _extract_docx(raw_bytes: bytes) -> str:
     return "\n".join(p.text for p in doc.paragraphs if p.text.strip()).strip()
 
 
-def extract_text_from_bytes(filename: str, raw_bytes: bytes) -> str:
-    filename = filename.lower()
+def _detect_format(filename: str, raw_bytes: bytes) -> str:
+    filename = (filename or "").lower()
     if filename.endswith(".txt"):
-        return raw_bytes.decode("utf-8", errors="ignore")
+        return "txt"
     if filename.endswith(".pdf"):
-        return _extract_pdf(raw_bytes)
+        return "pdf"
     if filename.endswith(".docx"):
+        return "docx"
+
+    if raw_bytes.startswith(b"%PDF"):
+        return "pdf"
+    if raw_bytes.startswith(b"PK\x03\x04"):
+        return "docx"
+
+    try:
+        raw_bytes.decode("utf-8")
+    except UnicodeDecodeError:
+        return ""
+    return "txt"
+
+
+def extract_text_from_bytes(filename: str, raw_bytes: bytes) -> str:
+    file_format = _detect_format(filename, raw_bytes)
+    if file_format == "txt":
+        return raw_bytes.decode("utf-8", errors="ignore")
+    if file_format == "pdf":
+        return _extract_pdf(raw_bytes)
+    if file_format == "docx":
         return _extract_docx(raw_bytes)
 
     raise ValueError(
-        "Unsupported resume format. Please upload a TXT, PDF, or DOCX resume file."
+        "Unsupported resume format. Please upload a valid TXT, PDF, or DOCX resume file."
     )
 
 
 def extract_text_from_file(uploaded_file) -> str:
-    """For Streamlit file uploader objects with .name and .read()."""
-    return extract_text_from_bytes(uploaded_file.name, uploaded_file.read())
+    """For Streamlit file uploader objects with .name, .type, and .read()."""
+    raw_bytes = uploaded_file.read()
+    content_type = (getattr(uploaded_file, "type", "") or "").lower()
 
+    if "pdf" in content_type:
+        return _extract_pdf(raw_bytes)
+    if "docx" in content_type or "officedocument" in content_type or "msword" in content_type:
+        return _extract_docx(raw_bytes)
+    if "text/plain" in content_type:
+        return raw_bytes.decode("utf-8", errors="ignore")
 
-def extract_text_from_file(uploaded_file) -> str:
-    """للاستخدام من Streamlit - uploaded_file كائن فيه .name و .read()"""
-    return extract_text_from_bytes(uploaded_file.name, uploaded_file.read())
+    return extract_text_from_bytes(uploaded_file.name, raw_bytes)
