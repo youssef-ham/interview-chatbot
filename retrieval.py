@@ -8,14 +8,25 @@ import datetime
 from pathlib import Path
 from typing import Any
 
-from chromadb import Client
-from chromadb.config import Settings
-from sentence_transformers import SentenceTransformer
-
 from config import get_setting
 from db.database import SessionLocal
 from db.models import Job, Question
 from reranker import rerank_documents
+
+_chromadb_import_error = None
+try:
+    from chromadb import Client
+    from chromadb.config import Settings
+except ImportError as exc:  # pragma: no cover
+    Client = None
+    Settings = None
+    _chromadb_import_error = exc
+
+try:
+    from sentence_transformers import SentenceTransformer
+except ImportError as exc:  # pragma: no cover
+    SentenceTransformer = None
+    _sentence_transformers_import_error = exc
 
 PERSIST_DIRECTORY = get_setting("CHROMA_PERSIST_DIR", "./chroma_store")
 EMBEDDING_MODEL_NAME = get_setting("EMBEDDING_MODEL_NAME", "all-MiniLM-L6-v2")
@@ -30,6 +41,10 @@ _client: Any = None
 
 def get_embedding_model():
     global _embedding_model
+    if SentenceTransformer is None:
+        raise RuntimeError(
+            "SentenceTransformers is not installed. Install sentence-transformers to enable embedding generation."
+        )
     if _embedding_model is None:
         _embedding_model = SentenceTransformer(EMBEDDING_MODEL_NAME)
     return _embedding_model
@@ -37,6 +52,15 @@ def get_embedding_model():
 
 def get_chroma_client():
     global _client
+    if Client is None or Settings is None:
+        message = (
+            "chromadb is not installed. Install chromadb in your environment "
+            "to enable RAG retrieval and indexing."
+        )
+        if _chromadb_import_error is not None:
+            raise RuntimeError(message) from _chromadb_import_error
+        raise RuntimeError(message)
+
     if _client is None:
         _client = Client(
             settings=Settings(

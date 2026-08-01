@@ -11,7 +11,7 @@ pypdf
 python-docx
 sqlalchemy
 psycopg2-binary
-chromadb
+chromadb>=1.5.0
 sentence-transformers
 black
 ruff
