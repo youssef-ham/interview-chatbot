@@ -7,16 +7,56 @@ import io
 
 
 def _extract_pdf(raw_bytes: bytes) -> str:
+    """Try best-effort PDF extraction.
+
+    Preferred: use pypdf.PdfReader when available for reliable text extraction.
+    Fallback: if pypdf is not installed, scan raw bytes for long printable runs
+    and return them as a last-resort plain-text extraction so the app still works
+    on environments where installing pypdf is not possible.
+    """
     try:
         from pypdf import PdfReader
-    except ImportError as exc:
-        raise ImportError(
-            "Cannot read PDF because the 'pypdf' library is not installed. "
-            "Install 'pypdf' or upload a TXT/DOCX resume instead."
-        ) from exc
+    except ImportError:
+        # Best-effort fallback: grab long runs of printable characters from the
+        # PDF bytes. This is imperfect but allows the app to continue on hosts
+        # where pypdf isn't installed (e.g., a restrictive Streamlit Cloud build
+        # cache). Prefer installing pypdf for robust extraction.
+        import re
 
+        # Find sequences of printable characters. Minimum length tuned to 30 to
+        # avoid noise from PDF internals.
+        printable_runs = re.findall(rb"[\x20-\x7E\x0A\x0D]{30,}", raw_bytes)
+        # Decode runs with best-effort UTF-8, fallback to latin-1 to avoid
+        # raising on binary contents.
+        decoded = []
+        for r in printable_runs:
+            try:
+                decoded.append(r.decode("utf-8", errors="ignore"))
+            except Exception:
+                try:
+                    decoded.append(r.decode("latin-1", errors="ignore"))
+                except Exception:
+                    pass
+        # Join runs with two newlines to approximate paragraph breaks.
+        text = "\n\n".join(line.strip() for line in decoded if line.strip())
+        if text:
+            return text
+        # If fallback found nothing, raise ImportError to trigger user-facing guidance.
+        raise ImportError(
+            "Cannot read PDF because the 'pypdf' library is not installed and a fallback extraction found no readable text. "
+            "Install 'pypdf' or upload a TXT/DOCX resume instead."
+        )
+
+    # If pypdf is available, use it (more reliable)
     reader = PdfReader(io.BytesIO(raw_bytes))
-    return "\n".join(page.extract_text() or "" for page in reader.pages).strip()
+    texts = []
+    for page in reader.pages:
+        try:
+            texts.append(page.extract_text() or "")
+        except Exception:
+            # continue on per-page errors
+            continue
+    return "\n".join(texts).strip()
 
 
 def _extract_docx(raw_bytes: bytes) -> str:

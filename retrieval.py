@@ -136,11 +136,16 @@ def embed_texts(texts: list[str]) -> list[list[float]]:
 
 
 def build_job_text(job: Job) -> str:
+    """Return a textual representation of the job for use in embedding/ranking.
+
+    This is intentionally plain English so generated questions and context are
+    in English for downstream models and prompts.
+    """
     required_topics = ", ".join(job.required_topics or []) if job.required_topics else ""
     return (
         f"{job.title}\n\n{job.description}\n\n"
-        f"المواضيع المطلوبة: {required_topics}\n"
-        f"المستوى: {job.difficulty}"
+        f"Required topics: {required_topics}\n"
+        f"Level: {job.difficulty}"
     )
 
 
@@ -149,12 +154,12 @@ def build_profile_text(candidate_profile: dict) -> str:
         return ""
 
     lines = [
-        f"مهارات: {', '.join(candidate_profile.get('skills', []))}",
-        f"تقنيات: {', '.join(candidate_profile.get('technologies', []))}",
-        f"لغات برمجة: {', '.join(candidate_profile.get('programming_languages', []))}",
-        f"أطر عمل: {', '.join(candidate_profile.get('frameworks', []))}",
-        f"سنوات خبرة تقريبية: {candidate_profile.get('work_experience_years', '')}",
-        f"مشاريع: {', '.join([p.get('name', '') for p in candidate_profile.get('projects', []) if p.get('name')])}",
+        f"Skills: {', '.join(candidate_profile.get('skills', []))}",
+        f"Technologies: {', '.join(candidate_profile.get('technologies', []))}",
+        f"Programming languages: {', '.join(candidate_profile.get('programming_languages', []))}",
+        f"Frameworks: {', '.join(candidate_profile.get('frameworks', []))}",
+        f"Approx. years of experience: {candidate_profile.get('work_experience_years', '')}",
+        f"Projects: {', '.join([p.get('name', '') for p in candidate_profile.get('projects', []) if p.get('name')])}",
     ]
     return "\n".join([line for line in lines if line and not line.endswith(": ")])
 
@@ -165,14 +170,19 @@ def build_query_text(
     candidate_keywords: list[str],
     job_context: str | None = None,
 ) -> str:
+    """Assemble the user query text used for retrieval (English).
+
+    Contains topic, optional job context, candidate keywords, and a short
+    profile summary when available.
+    """
     profile_text = build_profile_text(candidate_profile or {})
-    base = [f"الموضوع: {topic}"]
+    base = [f"Topic: {topic}"]
     if job_context:
-        base.append(f"سياق الوظيفة:\n{job_context}")
+        base.append(f"Job context:\n{job_context}")
     if candidate_keywords:
-        base.append(f"الكلمات المفتاحية: {' '.join(candidate_keywords)}")
+        base.append(f"Candidate keywords: {' '.join(candidate_keywords)}")
     if profile_text:
-        base.append(f"بيانات المرشح:\n{profile_text}")
+        base.append(f"Candidate profile:\n{profile_text}")
     return "\n".join(base).strip()
 
 
@@ -189,11 +199,11 @@ def _normalize_scores(scores: list[float]) -> list[float]:
 def build_question_text(question: Question) -> str:
     expected_points = question.expected_points or []
     points_text = "\n".join(
-        f"- {item['point']} (الوزن: {item.get('weight', 0):.0%})" for item in expected_points
+        f"- {item['point']} (weight: {item.get('weight', 0):.0%})" for item in expected_points
     )
-    text = f"{question.question}\n\nالنقاط المتوقعة:\n{points_text}"
+    text = f"{question.question}\n\nExpected points:\n{points_text}"
     if question.sample_answer:
-        text += f"\n\nمثال للإجابة:\n{question.sample_answer}"
+        text += f"\n\nSample answer:\n{question.sample_answer}"
     return text
 
 
