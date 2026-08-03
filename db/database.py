@@ -112,3 +112,30 @@ def init_db() -> None:
 
     ModelsBase.metadata.create_all(bind=engine)
     ensure_interview_session_columns()
+    _auto_seed_question_bank_if_empty()
+
+
+def _auto_seed_question_bank_if_empty() -> None:
+    """لو جدول الأسئلة فاضي (زي أول تشغيل على Streamlit Cloud مع SQLite جديدة)،
+    ازرع بنك الأسئلة تلقائيًا من data/questions.json وفهرسه في Chroma.
+    ده بيمنع مشكلة إن الأسئلة تفضل generic لأن الـ seeding اليدوي (scr/seed_questions.py)
+    مش بيتشغل تلقائيًا في بيئة الـ Cloud.
+    """
+    from db.models import Question
+
+    db = SessionLocal()
+    try:
+        has_questions = db.query(Question).first() is not None
+    finally:
+        db.close()
+
+    if has_questions:
+        return
+
+    try:
+        from scr.seed_questions import seed
+
+        logging.info("جدول الأسئلة فاضي - جاري الزرع التلقائي من data/questions.json")
+        seed()
+    except Exception:
+        logging.exception("فشل الزرع التلقائي لبنك الأسئلة")
