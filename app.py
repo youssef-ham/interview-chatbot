@@ -23,7 +23,7 @@ from config import get_setting
 from cv_analyzer import analyze_cv
 from cv_parser import extract_text_from_bytes, extract_text_from_file
 from db.database import SessionLocal, init_db
-from db.models import Answer, InterviewSession, Job
+from db.models import Answer, Feedback, InterviewSession, Job
 from retrieval import index_candidate_profile
 
 st.set_page_config(page_title="Interview Bot", page_icon="🎙️")
@@ -84,6 +84,94 @@ def format_rtl_text(text: str) -> str:
     return f"\u202b{text}\u202c"
 
 
+def inject_custom_css() -> None:
+    """يحقن CSS مخصص فوق شكل Streamlit الافتراضي: خط Tajawal (يدعم عربي/إنجليزي)،
+    بطاقة للسؤال الحالي، أزرار بألوان الهوية، وشارات (badges) ملونة للدرجات."""
+    st.markdown(
+        """
+        <style>
+        @import url('https://fonts.googleapis.com/css2?family=Tajawal:wght@400;500;700&display=swap');
+
+        html, body, [class*="css"] {
+            font-family: 'Tajawal', sans-serif;
+        }
+
+        /* بطاقة السؤال الحالي */
+        div[data-testid="stAlert"] {
+            border-radius: 14px;
+            border: 1px solid #E0E3F0;
+            box-shadow: 0 2px 10px rgba(45, 53, 97, 0.06);
+        }
+
+        /* الأزرار الأساسية (type="primary") */
+        button[kind="primary"] {
+            background-color: #2D3561;
+            border-radius: 10px;
+            border: none;
+            font-weight: 600;
+        }
+        button[kind="primary"]:hover {
+            background-color: #232a4d;
+        }
+
+        /* شارات الدرجات */
+        .score-badge {
+            display: inline-block;
+            padding: 4px 14px;
+            border-radius: 999px;
+            font-weight: 700;
+            font-size: 0.95rem;
+        }
+        .score-badge.score-high { background-color: #DFF3EA; color: #1E7A54; }
+        .score-badge.score-mid  { background-color: #FDEED2; color: #A9700F; }
+        .score-badge.score-low  { background-color: #FBE2E2; color: #B23A3A; }
+
+        /* Stepper أعلى الصفحة */
+        .stepper { display: flex; gap: 8px; margin-bottom: 1.5rem; }
+        .stepper .step {
+            flex: 1; text-align: center; padding: 8px 4px;
+            border-radius: 8px; font-size: 0.85rem; font-weight: 600;
+            background-color: #EDEFF7; color: #8A8FA8;
+        }
+        .stepper .step.active { background-color: #2D3561; color: white; }
+        .stepper .step.done { background-color: #DFF3EA; color: #1E7A54; }
+        </style>
+        """,
+        unsafe_allow_html=True,
+    )
+
+
+def render_stepper(current: str) -> None:
+    """يعرض شريط خطوات (Setup → Interview → Report) في أعلى كل صفحة، عشان المستخدم
+    يعرف هو فين بالظبط في الرحلة - بدل ما يفاجئه سؤال وراء سؤال من غير سياق."""
+    stages = [("setup", "1. Setup"), ("interview", "2. Interview"), ("report", "3. Report")]
+    order = {"setup": 0, "question": 1, "answered": 1, "report": 2}
+    current_index = order.get(current, 0)
+
+    html = '<div class="stepper">'
+    for index, (_, label) in enumerate(stages):
+        css_class = "step"
+        if index < current_index:
+            css_class += " done"
+        elif index == current_index:
+            css_class += " active"
+        html += f'<div class="{css_class}">{label}</div>'
+    html += "</div>"
+    st.markdown(html, unsafe_allow_html=True)
+
+
+def score_badge(score: float) -> str:
+    """يرجّع HTML لشارة ملونة حسب الدرجة: أخضر (ممتاز) / كهرماني (متوسط) / أحمر (ضعيف).
+    بدل ما المستخدم يفسّر الأرقام بنفسه، اللون بيدي إحساس فوري بالنتيجة."""
+    if score >= 7:
+        css_class = "score-high"
+    elif score >= 4:
+        css_class = "score-mid"
+    else:
+        css_class = "score-low"
+    return f'<span class="score-badge {css_class}">{score:.1f}/10</span>'
+
+
 def get_progress_context() -> dict:
     answered = st.session_state.get("answered_questions", [])
     total = st.session_state.get("max_questions", MAX_QUESTIONS)
@@ -101,6 +189,26 @@ def get_progress_context() -> dict:
         "avg_score": avg_score,
         "last_score": last_score,
     }
+
+
+def render_progress_bar() -> None:
+    """يعرض شريط التقدم + 3 مؤشرات (التقدّم/متوسط الدرجة/آخر درجة).
+    مستخرجة لدالة مستقلة لأن نفس الواجهة كانت مكررة حرفيًا في مرحلتي
+    'question' و 'answered' - أي تعديل مستقبلي هيبقى مكانه واحد بس.
+    """
+    context = get_progress_context()
+    st.progress(context["percentage"] / 100)
+
+    progress_col, avg_score_col, last_score_col = st.columns(3)
+    progress_col.metric("Progress", f"{context['current']}/{context['total']}")
+    avg_score_col.metric(
+        "Average Score",
+        f"{context['avg_score']:.1f}/10" if context["avg_score"] is not None else "—",
+    )
+    last_score_col.metric(
+        "Last Score",
+        f"{context['last_score']:.1f}/10" if context["last_score"] is not None else "—",
+    )
 
 
 def save_current_answer(
@@ -138,11 +246,11 @@ def finish_session(stop_reason: str | None, message: str) -> None:
     session_id = st.session_state.get("session_id")
     if session_id:
         db = SessionLocal()
-        sess = db.get(InterviewSession, session_id)
-        if sess:
-            sess.stopped_reason = stop_reason
-            sess.stopped_at = datetime.utcnow()
-            sess.status = "completed"
+        interview_session = db.get(InterviewSession, session_id)
+        if interview_session:
+            interview_session.stopped_reason = stop_reason
+            interview_session.stopped_at = datetime.utcnow()
+            interview_session.status = "completed"
             db.commit()
         db.close()
 
@@ -174,6 +282,50 @@ def skip_current_question() -> None:
     st.rerun()
 
 
+def save_feedback(rating: int, comment: str | None = None) -> None:
+    session_id = st.session_state.get("session_id")
+    if not session_id:
+        return
+    db = SessionLocal()
+    db.add(Feedback(session_id=session_id, rating=rating, comment=comment))
+    db.commit()
+    db.close()
+    st.session_state.feedback_submitted = True
+    st.rerun()
+
+
+def parse_and_analyze_cv(cv_bytes: bytes | None, cv_filename: str, cv_file=None) -> dict | None:
+    """يقرأ نص الـ CV (من bytes محفوظة في الجلسة، أو من ملف مرفوع مباشرة) ويحلله بالـ LLM.
+
+    كانت نفس خطوات الـ try/except دي مكررة 3 مرات في app.py (زرار "Retry parsing"،
+    وزرار "Start Interview" في حالتين مختلفتين)؛ دمجناها هنا في مكان واحد عشان أي
+    تعديل مستقبلي (رسالة خطأ، إضافة نوع ملف جديد...) يتعمل مرة واحدة بس.
+
+    بيحدّث st.session_state مباشرة (candidate_profile / cv_parse_failed / cv_parse_error)
+    ويرجع الـ candidate_profile (أو None لو فشل التحليل).
+    """
+    try:
+        if cv_bytes:
+            cv_text = extract_text_from_bytes(cv_filename, cv_bytes)
+        elif cv_file is not None:
+            cv_text = extract_text_from_file(cv_file)
+        else:
+            return None
+
+        with st.spinner("Analyzing resume..."):
+            candidate_profile = run_async(analyze_cv(cv_text))
+
+        st.session_state["candidate_profile"] = candidate_profile
+        st.session_state.pop("cv_parse_failed", None)
+        st.session_state.pop("cv_parse_error", None)
+        return candidate_profile
+
+    except Exception as error:
+        st.session_state["cv_parse_failed"] = True
+        st.session_state["cv_parse_error"] = str(error)
+        return None
+
+
 def get_active_jobs():
     db = SessionLocal()
     jobs = db.query(Job).filter_by(is_active="active").order_by(Job.created_at.desc()).all()
@@ -182,6 +334,8 @@ def get_active_jobs():
 
 
 def main():
+    inject_custom_css()
+
     if "stage" not in st.session_state:
         st.session_state.stage = "setup"
         st.session_state.answered_questions = []
@@ -191,6 +345,7 @@ def main():
         st.session_state.asked_question_ids = []
 
     st.title("🎙️ Interview Bot")
+    render_stepper(st.session_state.stage)
 
     # ---------------------------------------------------------------------------
     # Setup stage: select job + upload CV
@@ -238,20 +393,14 @@ def main():
 
             with col_b:
                 if st.button("Retry parsing resume"):
-                    try:
-                        cv_text = extract_text_from_bytes(
-                            st.session_state.get("cv_filename", "resume.txt"),
-                            st.session_state.get("cv_bytes", b""),
-                        )
-                        with st.spinner("Analyzing resume..."):
-                            parsed = run_async(analyze_cv(cv_text))
-                        st.session_state["candidate_profile"] = parsed
-                        st.session_state.pop("cv_parse_failed", None)
+                    parsed = parse_and_analyze_cv(
+                        st.session_state.get("cv_bytes"),
+                        st.session_state.get("cv_filename", "resume.txt"),
+                    )
+                    if parsed:
                         st.success("Resume parsed successfully. Will be used for personalized questions.")
-                    except Exception as e:
-                        st.session_state["cv_parse_failed"] = True
-                        st.session_state["cv_parse_error"] = str(e)
-                        st.error(f"Retry failed: {e}")
+                    else:
+                        st.error(f"Retry failed: {st.session_state.get('cv_parse_error')}")
 
                 if st.button("Clear uploaded CV"):
                     for k in [
@@ -270,48 +419,24 @@ def main():
         )
 
         if st.button("Start Interview", type="primary"):
-            candidate_profile = None
-            # Prefer an already-parsed profile if available
-            if st.session_state.get("candidate_profile"):
-                candidate_profile = st.session_state.get("candidate_profile")
-            else:
-                # If user uploaded bytes but parsing hasn't been attempted or failed previously, try now
-                if st.session_state.get("cv_bytes"):
-                    try:
-                        cv_text = extract_text_from_bytes(
-                            st.session_state.get("cv_filename", "resume.txt"),
-                            st.session_state.get("cv_bytes", b""),
-                        )
-                        with st.spinner("Analyzing resume..."):
-                            candidate_profile = run_async(analyze_cv(cv_text))
-                        st.session_state["candidate_profile"] = candidate_profile
-                        st.session_state.pop("cv_parse_failed", None)
-                    except Exception as e:
-                        st.session_state["cv_parse_failed"] = True
-                        st.session_state["cv_parse_error"] = str(e)
-                        st.warning(
-                            "Unable to read or analyze the resume. Continuing without CV analysis. "
-                            f"Please upload a valid TXT, PDF, or DOCX resume.\nReason: {e}"
-                        )
-                        candidate_profile = None
-                elif cv_file is not None:
-                    # Fallback to attempt parsing from the UploadedFile directly
-                    try:
-                        cv_text = extract_text_from_file(cv_file)
-                        with st.spinner("Analyzing resume..."):
-                            candidate_profile = run_async(analyze_cv(cv_text))
-                        st.session_state["candidate_profile"] = candidate_profile
-                        st.session_state.pop("cv_parse_failed", None)
-                    except Exception as e:
-                        st.session_state["cv_parse_failed"] = True
-                        st.session_state["cv_parse_error"] = str(e)
-                        st.warning(
-                            "Unable to read or analyze the resume. Continuing without CV analysis. "
-                            f"Please upload a valid TXT, PDF, or DOCX resume.\nReason: {e}"
-                        )
-                        candidate_profile = None
+            candidate_profile = st.session_state.get("candidate_profile")
+
+            # Prefer an already-parsed profile; otherwise try to parse now from
+            # whichever CV source is available (saved bytes, then raw uploaded file).
+            if not candidate_profile and (st.session_state.get("cv_bytes") or cv_file is not None):
+                candidate_profile = parse_and_analyze_cv(
+                    st.session_state.get("cv_bytes"),
+                    st.session_state.get("cv_filename", "resume.txt"),
+                    cv_file=cv_file,
+                )
+                if candidate_profile is None and st.session_state.get("cv_parse_failed"):
+                    st.warning(
+                        "Unable to read or analyze the resume. Continuing without CV analysis. "
+                        f"Please upload a valid TXT, PDF, or DOCX resume.\nReason: {st.session_state.get('cv_parse_error')}"
+                    )
+
             db = SessionLocal()
-            db_session = InterviewSession(
+            interview_session = InterviewSession(
                 job_id=selected_job.id,  # كان ناقص - بدونه معندناش رابط بين الجلسة والوظيفة
                 topic=", ".join(selected_job.required_topics),
                 difficulty=selected_job.difficulty,
@@ -320,12 +445,12 @@ def main():
                 consecutive_success_count=0,
                 consecutive_fail_count=0,
             )
-            db.add(db_session)
+            db.add(interview_session)
             db.commit()
-            db.refresh(db_session)
-            st.session_state.session_id = db_session.id
+            db.refresh(interview_session)
+            st.session_state.session_id = interview_session.id
             if candidate_profile:
-                index_candidate_profile(db_session.id, candidate_profile)
+                index_candidate_profile(interview_session.id, candidate_profile)
             db.close()
 
             st.session_state.job_topics = selected_job.required_topics
@@ -390,26 +515,7 @@ def main():
                 st.session_state.current_answer_id = answer_row.id
                 db.close()
 
-        progress_context = get_progress_context()
-        st.progress(progress_context["percentage"] / 100)
-        col1, col2, col3 = st.columns(3)
-        col1.metric("Progress", f"{progress_context['current']}/{progress_context['total']}")
-        col2.metric(
-            "Average Score",
-            (
-                f"{progress_context['avg_score']:.1f}/10"
-                if progress_context["avg_score"] is not None
-                else "—"
-            ),
-        )
-        col3.metric(
-            "Last Score",
-            (
-                f"{progress_context['last_score']:.1f}/10"
-                if progress_context["last_score"] is not None
-                else "—"
-            ),
-        )
+        render_progress_bar()
 
         st.subheader("💬 Current Question")
         st.info(st.session_state.current_question["question"])
@@ -424,8 +530,19 @@ def main():
             if st.button("⏭️ Skip Question", use_container_width=True):
                 skip_current_question()
         with action_col3:
-            if st.button("🛑 End Interview", use_container_width=True):
-                finish_session("user_ended", "The interview has ended — we will review your answers and get back to you.")
+            if st.session_state.get("confirm_end_interview"):
+                if st.button("⚠️ Confirm End", use_container_width=True):
+                    finish_session(
+                        "user_ended",
+                        "The interview has ended — we will review your answers and get back to you.",
+                    )
+            else:
+                if st.button("🛑 End Interview", use_container_width=True):
+                    st.session_state.confirm_end_interview = True
+                    st.rerun()
+
+        if st.session_state.get("confirm_end_interview"):
+            st.warning("Are you sure? This cannot be undone. Click \"⚠️ Confirm End\" to finish now.")
 
         if submitted and answer.strip():
             with st.spinner("Evaluating..."):
@@ -460,15 +577,15 @@ def main():
             )
 
             db = SessionLocal()
-            sess = db.get(InterviewSession, st.session_state.session_id)
-            if sess:
+            interview_session = db.get(InterviewSession, st.session_state.session_id)
+            if interview_session:
                 all_scores = [
                     a.get("score", 0.0)
                     for a in st.session_state.answered_questions
                     if a.get("score") is not None
                 ]
                 agg = sum(all_scores) / len(all_scores) if all_scores else 0.0
-                sess.aggregated_score = agg
+                interview_session.aggregated_score = agg
 
                 consec_success = 0
                 for s in reversed(st.session_state.recent_scores):
@@ -476,7 +593,7 @@ def main():
                         consec_success += 1
                     else:
                         break
-                sess.consecutive_success_count = consec_success
+                interview_session.consecutive_success_count = consec_success
 
                 consec_fail = 0
                 for s in reversed(st.session_state.recent_scores):
@@ -484,7 +601,7 @@ def main():
                         consec_fail += 1
                     else:
                         break
-                sess.consecutive_fail_count = consec_fail
+                interview_session.consecutive_fail_count = consec_fail
                 db.commit()
             db.close()
 
@@ -516,6 +633,7 @@ def main():
 
             st.session_state.current_question = None
             st.session_state.current_answer_id = None
+            st.session_state.confirm_end_interview = False
             st.session_state.stage = "answered"
             st.rerun()
 
@@ -523,32 +641,13 @@ def main():
     # مرحلة عرض النتيجة
     # ---------------------------------------------------------------------------
     elif st.session_state.stage == "answered":
-        progress_context = get_progress_context()
-        st.progress(progress_context["percentage"] / 100)
-        col1, col2, col3 = st.columns(3)
-        col1.metric("Progress", f"{progress_context['current']}/{progress_context['total']}")
-        col2.metric(
-            "Average Score",
-            (
-                f"{progress_context['avg_score']:.1f}/10"
-                if progress_context["avg_score"] is not None
-                else "—"
-            ),
-        )
-        col3.metric(
-            "Last Score",
-            (
-                f"{progress_context['last_score']:.1f}/10"
-                if progress_context["last_score"] is not None
-                else "—"
-            ),
-        )
+        render_progress_bar()
 
         ev = st.session_state.last_evaluation
         st.success("Question evaluated successfully")
-        st.metric("Score", f"{ev['score']}/10")
+        st.markdown(f"**Score:** {score_badge(ev['score'])}", unsafe_allow_html=True)
         st.write("**Missing points:**", ev["missing_points"])
-        st.write("**Feedback:**", ev["feedback"])
+        st.markdown(f"**Feedback:** {format_rtl_text(ev['feedback'])}", unsafe_allow_html=True)
 
         is_last = len(st.session_state.answered_questions) >= st.session_state.max_questions
         label = "View Report" if is_last else "Next Question"
@@ -570,10 +669,10 @@ def main():
                 st.session_state.final_report = report
 
                 db = SessionLocal()
-                db_session = db.get(InterviewSession, st.session_state.session_id)
-                if db_session:
-                    db_session.final_report = report
-                    db_session.status = "completed"
+                interview_session = db.get(InterviewSession, st.session_state.session_id)
+                if interview_session:
+                    interview_session.final_report = report
+                    interview_session.status = "completed"
                     db.commit()
                 db.close()
 
@@ -582,12 +681,14 @@ def main():
         st.markdown("---")
 
         col1, col2, col3 = st.columns(3)
-        col1.metric("Overall Score", f"{report['overall_score']}/10")
+        with col1:
+            st.markdown("**Overall Score**")
+            st.markdown(score_badge(report["overall_score"]), unsafe_allow_html=True)
         col2.metric("Recommendation", report["recommendation"])
         col3.metric("Status", "Completed")
 
         st.markdown("### Summary")
-        st.write(report["summary"])
+        st.markdown(format_rtl_text(report["summary"]), unsafe_allow_html=True)
 
         strengths = report.get("strengths", []) or []
         weaknesses = report.get("weaknesses", []) or []
@@ -610,6 +711,19 @@ def main():
                 st.caption("No weaknesses listed")
 
         st.markdown("---")
+        st.markdown("### Was this report helpful?")
+        if st.session_state.get("feedback_submitted"):
+            st.success("Thanks for your feedback!")
+        else:
+            fb_col1, fb_col2 = st.columns(2)
+            with fb_col1:
+                if st.button("👍 Helpful", use_container_width=True):
+                    save_feedback(1)
+            with fb_col2:
+                if st.button("👎 Not helpful", use_container_width=True):
+                    save_feedback(-1)
+
+        st.markdown("---")
         if st.button("New Interview", type="primary", use_container_width=True):
             for key in [
                 "stage",
@@ -622,6 +736,8 @@ def main():
                 "stop_message",
                 "recent_scores",
                 "questions_asked_count",
+                "feedback_submitted",
+                "confirm_end_interview",
             ]:
                 st.session_state.pop(key, None)
             st.rerun()

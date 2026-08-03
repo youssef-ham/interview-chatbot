@@ -10,5 +10,27 @@ services:
       - "5432:5432"
     volumes:
       - pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U interview_bot"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+
+  app:
+    build: .
+    container_name: interview_bot_app
+    ports:
+      - "8501:8501"
+    environment:
+      DATABASE_URL: postgresql://interview_bot:devpassword@db:5432/interview_bot
+      CHROMA_PERSIST_DIR: /app/chroma_store
+      GROQ_API_KEY: ${GROQ_API_KEY}
+    depends_on:
+      db:
+        condition: service_healthy
+    volumes:
+      - chroma_data:/app/chroma_store
+
 volumes:
   pgdata:
+  chroma_data:

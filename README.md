@@ -1,5 +1,20 @@
 # interview-chatbot
 
+## Problem
+
+Technical recruiters and hiring teams spend a large amount of time conducting first-round
+technical interviews to screen candidates before they even reach a human interviewer.
+This is repetitive, time-consuming, and inconsistent — different interviewers ask different
+questions and grade answers with different standards.
+
+`interview-chatbot` solves this by acting as an automated first-round technical interviewer:
+a candidate uploads their CV, is matched to a specific job's required topics and difficulty,
+and receives interview questions personalized to their actual skills and projects (pulled
+from a curated question bank via retrieval, not invented from scratch). Answers are graded
+automatically against clear expected points, the interview adaptively stops early once a
+clear pass/fail pattern emerges, and the hiring team receives a structured final report
+(strengths, weaknesses, recommendation) — cutting down manual screening time significantly.
+
 ## Overview
 
 `interview-chatbot` is an intelligent interview assistant built with Streamlit for the candidate-facing UI and FastAPI for backend services. The project combines:

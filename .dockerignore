@@ -1,0 +1,10 @@
+.venv/
+__pycache__/
+*.pyc
+.git/
+.ruff_cache/
+*.db
+test.db
+.env
+.pytest_cache/
+data/rerank_feedback.csv

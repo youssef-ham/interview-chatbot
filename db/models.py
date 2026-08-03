@@ -50,6 +50,15 @@ class InterviewSession(Base):
     answers = relationship("Answer", back_populates="session", cascade="all, delete-orphan")
 
 
+class Feedback(Base):
+    __tablename__ = "feedback"
+    id = Column(Integer, primary_key=True, autoincrement=True)
+    session_id = Column(Integer, ForeignKey("interview_sessions.id"), nullable=False)
+    rating = Column(Integer, nullable=False)  # 1 = thumbs up, -1 = thumbs down
+    comment = Column(Text, nullable=True)
+    created_at = Column(DateTime, default=datetime.utcnow)
+
+
 class Answer(Base):
     __tablename__ = "answers"
     id = Column(Integer, primary_key=True, autoincrement=True)

@@ -34,11 +34,20 @@ except ImportError as exc:  # pragma: no cover
     SentenceTransformer = None
     _sentence_transformers_import_error = exc
 
+try:
+    from rank_bm25 import BM25Okapi
+except ImportError as exc:  # pragma: no cover
+    BM25Okapi = None
+    _bm25_import_error = exc
+
 PERSIST_DIRECTORY = get_setting("CHROMA_PERSIST_DIR", "./chroma_store")
 EMBEDDING_MODEL_NAME = get_setting("EMBEDDING_MODEL_NAME", "all-MiniLM-L6-v2")
 COLLECTION_NAME = get_setting("CHROMA_COLLECTION_NAME", "interview_documents")
 RERANKER_TOP_N = int(get_setting("RERANKER_TOP_N", "20"))
 RERANK_FUSION_ALPHA = float(get_setting("RERANK_FUSION_ALPHA", "0.7"))
+# وزن الدمج بين البحث النصي (BM25) والبحث بالمتجهات (vector). 1.0 = اعتماد كامل على vector،
+# 0.0 = اعتماد كامل على BM25. القيمة الافتراضية توزيع متوازن بين الاتنين.
+HYBRID_FUSION_ALPHA = float(get_setting("HYBRID_FUSION_ALPHA", "0.5"))
 RERANK_FEEDBACK_FILE = get_setting("RERANK_FEEDBACK_FILE", "./data/rerank_feedback.csv")
 
 _embedding_model: Any = None
@@ -197,6 +206,22 @@ def _normalize_scores(scores: list[float]) -> list[float]:
     if max_score == min_score:
         return [1.0 for _ in scores]
     return [(score - min_score) / (max_score - min_score) for score in scores]
+
+
+def bm25_scores(query_text: str, candidate_texts: list[str]) -> list[float]:
+    """يحسب درجة تطابق نصي (lexical) بين الـ query ومجموعة مرشحين باستخدام BM25.
+    ده بيمثل شق الـ 'text search' في الـ hybrid search - بيمسك تطابق كلمات حرفي
+    (زي اسم تقنية أو مصطلح تقني بالظبط) اللي ممكن الـ vector search يفوّته أحيانًا.
+
+    لو مكتبة rank_bm25 مش متاحة، بيرجع أصفار (يعني الاعتماد الكامل هيبقى على vector).
+    """
+    if BM25Okapi is None or not candidate_texts:
+        return [0.0 for _ in candidate_texts]
+
+    tokenized_corpus = [text.lower().split() for text in candidate_texts]
+    bm25 = BM25Okapi(tokenized_corpus)
+    tokenized_query = query_text.lower().split()
+    return list(bm25.get_scores(tokenized_query))
 
 
 def build_question_text(question: Question) -> str:
@@ -544,8 +569,19 @@ def find_best_matching_question(
             candidate_texts.append(build_question_text(question))
             similarity_scores.append(1.0 / (1.0 + float(score)))
 
+        # Hybrid search: ندمج البحث النصي (BM25) مع البحث بالمتجهات (vector similarity)
+        # قبل ما ندخل على الـ cross-encoder reranker. كده الدرجة النهائية بتاخد في الاعتبار
+        # التطابق الدلالي (vector) والتطابق الحرفي في الكلمات (BM25) مع بعض.
+        lexical_scores = bm25_scores(query_text, candidate_texts)
+        normalized_lexical = _normalize_scores(lexical_scores)
+        normalized_similarity_raw = _normalize_scores(similarity_scores)
+        hybrid_scores = [
+            HYBRID_FUSION_ALPHA * v + (1 - HYBRID_FUSION_ALPHA) * b
+            for v, b in zip(normalized_similarity_raw, normalized_lexical)
+        ]
+
         rerank_scores = rerank_documents(query_text, candidate_texts)
-        normalized_similarity = _normalize_scores(similarity_scores)
+        normalized_similarity = _normalize_scores(hybrid_scores)
         normalized_rerank = _normalize_scores(rerank_scores)
 
         fused_scores = [
