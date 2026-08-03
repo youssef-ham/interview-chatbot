@@ -9,7 +9,11 @@ report for the hiring team.
 Built for an Arabic-speaking candidate base, but the interface and question bank currently run
 in English (see [Future Improvements](#future-improvements)).
 
-> 📹 **Demo video:** _add a short screen recording here (see "Recording a demo video" below)._
+> 📹 **Demo video:** 
+
+https://github.com/user-attachments/assets/d00bd029-3181-4799-a5c8-5a972ba9fe56
+
+
 
 ## Table of contents
 
